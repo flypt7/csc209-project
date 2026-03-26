@@ -1,11 +1,9 @@
-#ifndef hann
-#define hann
-#endif
+#ifndef PREPARE_DATA_H
+#define PREPARE_DATA_H
 
-#ifndef normalize
-#define normalize
-#endif
+// Function declarations (prototypes)
+double hann(int i, int size);
+double normalize(int i, int bit_depth);
+double * prepare_data(double* data, int bit_depth, int size);
 
-#ifndef prepare_data
-#define preprare_data
 #endif
