@@ -1,5 +1,5 @@
-#ifndef PREPARE_DATA_H
-#define PREPARE_DATA_H
+#ifndef MODIFY_DATA_H
+#define MODIFY_DATA_H
 
 // Function declarations (prototypes)
 double hann(int i, int size);
