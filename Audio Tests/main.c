@@ -6,22 +6,24 @@
 
 int main() { 
 WAV_INFO * info = parse_file("Owls.wav");
-double* newdata = prepare_data(info->right_channel_pcm)
+double* newdata = prepare_data(info->right_channel_pcm, info->bit_depth, info->pcm_size);
 for(int i = 0; i < 10; i++){
-    printf("%f/n",info->right_channel_pcm[i])
+    printf("%f/n", info->right_channel_pcm[i]);
 }
 for(int i = 0; i < 10; i++){
-    printf("%f/n",newdata[i])
+    printf("%f/n", newdata[i]);
 }
 
 fftw_complex *in, *out;
 fftw_plan p;
+int N = 2048;
 in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
 out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
 p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
 for(int i = 0; i < info->pcm_size; i++){
-    in[i]=newdata[i];
+    in[i][0]=info->right_channel_pcm[i];
+    in[i][1]=0;
 }
 
 fftw_execute(p); /* repeat as needed */
