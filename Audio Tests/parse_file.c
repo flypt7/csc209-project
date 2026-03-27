@@ -100,7 +100,7 @@ WAV_INFO *parse_file(char *filename) {
         i++;
     }
 
-    printf("File parsing complete.");
+    printf("File parsing complete.\n");
 
     return wav_info;
 
