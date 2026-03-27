@@ -13,7 +13,7 @@ double hann(int i, int size){
 double * prepare_data(double* data, int bit_depth, int size){ 
     for(int i = 0; i < size; i++){
         data[i]=normalize(data[i],bit_depth);
-        hann(data[i], size);
+        data[i]=hann(data[i], size);
     }
     return data;
 }
