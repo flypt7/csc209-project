@@ -3,16 +3,15 @@
 #include <stdlib.h>
 #include "parse_file.h"
 
-int main(int argc, char *argv[]) {
-    char *filename = argv[1];
+WAV_INFO *parse_file(char *filename) {
 
-    FILE *fp = fopen(argv[1], "rb"); 
+    FILE *fp = fopen(filename, "rb"); 
     if (fp == NULL) {
         perror("Error reading file");
         exit(1);
     }
 
-    int name_length = strlen(argv[1]);
+    int name_length = strlen(filename);
     char file_ex[5] = {filename[name_length - 4], filename[name_length - 3], filename[name_length - 2], filename[name_length - 1], '\0'};
 
     if (strcmp(file_ex, ".wav") != 0) {
@@ -82,10 +81,6 @@ int main(int argc, char *argv[]) {
     wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
     wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
 
-
-    // TODO: limit to 16-bit audio
-    // and fix sample collection below
-
     // Now, read audio data (starts at bit 44)
     fseek(fp, 44, SEEK_SET);
     int i = 0;
@@ -106,5 +101,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("File parsing complete.");
+
+    return wav_info;
 
 }
