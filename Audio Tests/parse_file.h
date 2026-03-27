@@ -1,8 +1,9 @@
-typedef struct WAV_INFO {
-    int num_channels;
+typedef struct WAVE_METADATA {
+    short num_channels;
     int sample_rate;
-    int bit_depth;
-    int *right_channel_pcm;
-    int *left_channel_pcm;
+    short bit_depth;
+    unsigned int num_samples;
+    double *left_channel_pcm;
+    double *right_channel_pcm;
     int pcm_size;
 } WAV_INFO;

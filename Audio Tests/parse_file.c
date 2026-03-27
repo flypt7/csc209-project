@@ -52,6 +52,9 @@ int main(int argc, char *argv[]) {
         printf("Error reading bit depth.");
         exit(1);
     }
+    if (wav_info->bit_depth != 16) {
+        printf("Unfortunately, only 16 bit audio data is currently supported. Please try again with a file with 16 bit audio data.");
+    }
 
     // Reading number of samples
     if (fseek(fp, 40, SEEK_SET) == -1) {
@@ -79,28 +82,29 @@ int main(int argc, char *argv[]) {
     wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
     wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
 
+
+    // TODO: limit to 16-bit audio
+    // and fix sample collection below
+
     // Now, read audio data (starts at bit 44)
     fseek(fp, 44, SEEK_SET);
     int i = 0;
     int j = 0;
-    int sample;
+    short sample;
     
     while (fread(&sample, (wav_info->bit_depth/8), 1, fp) != 0) {
         if (i % 2 == 0) {
             // Left channel case
-            (wav_info->left_channel_pcm)[j] = (double)sample;
+            (wav_info->left_channel_pcm)[j] = (double) sample;
+
         } else {
             // Right channel case
-            (wav_info->right_channel_pcm)[j] = (double)sample;
+            (wav_info->right_channel_pcm)[j] = (double) sample;
             j++;
         }
         i++;
     }
 
-    j = 0;
-    for (j; j < (wav_info->num_samples / wav_info->num_channels); j++) {
-        printf("%f\n", wav_info->right_channel_pcm[j]);
-    }
-
+    printf("File parsing complete.");
 
 }
