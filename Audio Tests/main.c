@@ -35,5 +35,4 @@ int main() {
     int slices = 4; // define how many bands the equalizer has
     double **mag_slices = split(magnitudes, slices, N);
     
-    free(magnitudes); // no longer needed as they have been split
 }
