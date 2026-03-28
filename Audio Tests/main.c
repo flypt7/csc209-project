@@ -5,24 +5,35 @@
 #include "modify_data.h"
 
 int main() { 
-WAV_INFO *info = parse_file("gloop.wav");
-double *new_data = prepare_data(info->right_channel_pcm, info->bit_depth, info->pcm_size);
+    WAV_INFO *info = parse_file("gloop.wav");
+    double *new_data = prepare_data(info->right_channel_pcm, info->bit_depth, info->pcm_size);
 
-fftw_complex *in, *out;
-fftw_plan p;
-int N = 2048;
-in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    fftw_complex *in, *out;
+    fftw_plan p;
+    int N = 2048; // number of samples to take for FFT
+    in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
 
-for (int i = 0; i < N; i++) {
-    in[i][0]= (new_data)[i];
-    in[i][1]= (double) 0;
-}
+    // Take N samples for FFT calculation
+    for (int i = 0; i < N; i++) {
+        in[i][0]= (new_data)[i];
+        in[i][1]= (double) 0;
+    }
 
-p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_MEASURE);
+    // Create a plan for FFT (optimizes the calculations)
+    p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_MEASURE);
 
-fftw_execute(p); /* repeat as needed */
+    fftw_execute(p); /* repeat as needed */
 
-fftw_destroy_plan(p);
-fftw_free(in); fftw_free(out);
+    // Output complex numbers now in out
+
+    fftw_destroy_plan(p);
+    fftw_free(in); fftw_free(out);
+
+    double *magnitudes = complex_to_mag(out, N);
+
+    int slices = 4; // define how many bands the equalizer has
+    double **mag_slices = split(magnitudes, slices, N);
+    
+    free(magnitudes); // no longer needed as they have been split
 }
