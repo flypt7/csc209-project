@@ -3,6 +3,50 @@
 #include <stdlib.h>
 #include "parse_file.h"
 
+/*
+ * Helper function which fills the channel_pcm attributes of wav_info.
+ * Stereo case: PCM samples are read in LRLR order into left and right channel PCM.
+ * Mono case: PCM samples only fill the left channel PCM.
+ */
+void fill_pcm(WAV_INFO *wav_info, FILE *fp) {
+    
+    wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
+
+    // Only malloc right channel if audio is stereo (will not be used otherwise)
+    if (wav_info->num_channels == 2) {
+        wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
+    }    
+
+    // Now, read audio data (starts at bit 44 of audio file)
+    int i = 0;
+    int j = 0;
+    short sample;
+    fseek(fp, 44, SEEK_SET);
+    
+    while (fread(&sample, (wav_info->bit_depth/8), 1, fp) != 0) {
+        if (i % 2 == 0) {
+            // Left channel case
+            (wav_info->left_channel_pcm)[j] = (double) sample;
+
+        } else {
+            // Right channel case
+            (wav_info->right_channel_pcm)[j] = (double) sample;
+            j++;
+        }
+
+        // Fill right channel only if audio has 2 channels
+        if (wav_info->num_channels == 2) {
+            i++;
+        }
+        else { // Have to move through left_channel_pcm
+            j++;
+        }
+    }
+}
+
+/*
+ * Return a WAV_INFO struct containing metadata and PCM data of a .wav file
+ */
 WAV_INFO *parse_file(char *filename) {
 
     FILE *fp = fopen(filename, "rb"); 
@@ -15,7 +59,7 @@ WAV_INFO *parse_file(char *filename) {
     char file_ex[5] = {filename[name_length - 4], filename[name_length - 3], filename[name_length - 2], filename[name_length - 1], '\0'};
 
     if (strcmp(file_ex, ".wav") != 0) {
-        printf("File is not .wav");
+        printf("File is not .wav\n");
         exit(1);
     }
 
@@ -28,7 +72,7 @@ WAV_INFO *parse_file(char *filename) {
         exit(1);
     }
     if (fread(&(wav_info->num_channels), sizeof(short), 1, fp) == 0 ||  wav_info->num_channels > 2) {
-        printf("Error reading number of channels. Ensure the file does not have more than 2 audio channels");
+        printf("Error reading number of channels. Ensure the file does not have more than 2 audio channels\n");
         exit(1);
     }
     
@@ -38,7 +82,7 @@ WAV_INFO *parse_file(char *filename) {
         exit(1);
     }
     if (fread(&(wav_info->sample_rate), sizeof(int), 1, fp) == 0) {
-        printf("Error reading sample rate.");
+        printf("Error reading sample rate.\n");
         exit(1);
     }
 
@@ -48,11 +92,11 @@ WAV_INFO *parse_file(char *filename) {
         exit(1);
     }
     if (fread(&(wav_info->bit_depth), 2, 1, fp) == 0) {
-        printf("Error reading bit depth.");
+        printf("Error reading bit depth.\n");
         exit(1);
     }
     if (wav_info->bit_depth != 16) {
-        printf("Unfortunately, only 16 bit audio data is currently supported. Please try again with a file with 16 bit audio data.");
+        printf("Unfortunately, only 16 bit audio data is currently supported. Please try again with a file with 16 bit audio data.\n");
     }
 
     // Reading number of samples
@@ -61,7 +105,7 @@ WAV_INFO *parse_file(char *filename) {
         exit(1);
     }
     if (fread(&(wav_info->num_samples), sizeof(int), 1, fp) == 0) {
-        printf("Error reading subchunk2 size.");
+        printf("Error reading subchunk2 size.\n");
         exit(1);
     }
 
@@ -71,34 +115,14 @@ WAV_INFO *parse_file(char *filename) {
 
     if (wav_info->num_channels == 1) {
         printf("Number of samples (over %d channel): %d\n", wav_info->num_channels, wav_info->num_samples);
-        printf("Mono audio detected - file will be converted to dual channel split mono.");
+        printf("Mono audio detected - file will be converted to dual channel split mono.\n");
     } else {
         printf("Number of samples (over %d channels): %d\n", wav_info->num_channels, wav_info->num_samples);
 
     }
 
-    // Set up PCM arrays - cast PCM data to double for use in normalization and FFT.
-    wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
-    wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
-
-    // Now, read audio data (starts at bit 44)
-    fseek(fp, 44, SEEK_SET);
-    int i = 0;
-    int j = 0;
-    short sample;
-    
-    while (fread(&sample, (wav_info->bit_depth/8), 1, fp) != 0) {
-        if (i % 2 == 0) {
-            // Left channel case
-            (wav_info->left_channel_pcm)[j] = (double) sample;
-
-        } else {
-            // Right channel case
-            (wav_info->right_channel_pcm)[j] = (double) sample;
-            j++;
-        }
-        i++;
-    }
+    // Now, fill the pcm data arrays
+    fill_pcm(wav_info, fp);    
 
     printf("File parsing complete.\n");
 
