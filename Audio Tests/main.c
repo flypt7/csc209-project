@@ -26,13 +26,11 @@ int main() {
     fftw_execute(p); /* repeat as needed */
 
     // Output complex numbers now in out
+    int max_out = max_mag(out, N);
+    int slices = 4; // define how many bands the equalizer has
+    double ***freq_slices = split(out, slices, N); // equal partitions of original N real-imaginary pairs - can be used in amplify!
 
     fftw_destroy_plan(p);
-    fftw_free(in); fftw_free(out);
-
-    double *magnitudes = complex_to_mag(out, N);
-
-    int slices = 4; // define how many bands the equalizer has
-    double **mag_slices = split(magnitudes, slices, N);
+    fftw_free(in); fftw_free(out); 
     
 }
