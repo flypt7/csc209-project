@@ -8,4 +8,5 @@ typedef struct WAVE_METADATA {
     int pcm_size;
 } WAV_INFO;
 
+void fill_pcm(WAV_INFO *wav_info, FILE *fp);
 WAV_INFO *parse_file(char *filename);
