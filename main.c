@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <fftw3.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "fftw_helper.h"
 #include "parse_file.h"
@@ -57,7 +58,7 @@ int main() {
             for(int i = 0; i < num_of_frames; i++){
                 results[i] = malloc(2048 * sizeof(fftw_complex)); 
                 memcpy(results[i], execute(2048*i,new_data), 2048 * sizeof(fftw_complex); // copy result of execute into result
-                double max_amp_result = max_mag(out, 2048); // find local max
+                double max_amp_result = max_mag(results[i], 2048); // find local max
                 if(max_amp_result > max_amp){
                     max_amp = max_amp_result; // check if bigger than global max
                 }

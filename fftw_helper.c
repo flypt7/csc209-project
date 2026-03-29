@@ -38,7 +38,7 @@ fftw_complex* execute_specific(int size, int starting_pos, double* last_frame){
         in_specific[i][1]= (double) 0;
     }
 
-    fftw_execute(p); 
+    fftw_execute(q); 
     fftw_destroy_plan(q);
     fftw_free(in); 
     return out_specific;
