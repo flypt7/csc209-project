@@ -71,7 +71,6 @@ int main() {
 
     }
     // TODO: parent process (will recombine post-amplification = wait calls etc.)
-    wait;
     return 0;       
            
 }
