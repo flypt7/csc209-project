@@ -2,6 +2,7 @@
 #include <fftw3.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "fftw_helper.h"
 #include "parse_file.h"
 #include "modify_data.h"
 
@@ -46,32 +47,22 @@ int main() {
 
                 }
             }
-            double *new_data = prepare_data(pcm_data, info->bit_depth, info->pcm_size);
+            double *new_data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
 
-            fftw_complex *in, *out;
-            fftw_plan p;
-            int N = 2048; // number of samples to take for FFT
-            in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-            out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+            //TODO: split into frames of size 2048 
+            int num_of_frames = info->num_samples / 2048;
+            int last_frame_size = info->num_samples % 2048;
 
-            // Take N samples for FFT calculation
-            for (int i = 0; i < N; i++) {
-                in[i][0]= (new_data)[i];
-                in[i][1]= (double) 0;
-            }
-
-            // Create a plan for FFT (optimizes the calculations)
-            p = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_MEASURE);
-
-            fftw_execute(p); /* repeat as needed */
+            fftw_complex *out = execute(new_data);
 
             // Output complex numbers now in out
-            int max_out = max_mag(out, N);
+            int max_out = max_mag(out, 2048);
             int slices = 4; // define how many bands the equalizer has
-            double ***freq_slices = split(out, slices, N); // equal partitions of original N real-imaginary pairs - can be used in amplify!
+            double ***freq_slices = split(out, slices, 2048); // equal partitions of original N real-imaginary pairs - can be used in amplify!
 
-            fftw_destroy_plan(p);
-            fftw_free(in); fftw_free(out);
+            for(int i=0; i<10;i++){
+                printf("%f+%fi\n",out[i][0],out[i][1]);
+            }
             
             // TODO: split the child process into 3 children processes
 
@@ -80,7 +71,7 @@ int main() {
 
     }
     // TODO: parent process (will recombine post-amplification = wait calls etc.)
-    
+    wait;
     return 0;       
            
 }
