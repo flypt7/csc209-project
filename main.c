@@ -52,19 +52,19 @@ int main() {
             //TODO: split into frames of size 2048 
             int num_of_frames = info->num_samples / 2048;
             int last_frame_size = info->num_samples % 2048;
-
-            fftw_complex *out = execute(new_data);
-
-            // Output complex numbers now in out
-            int max_out = max_mag(out, 2048);
-            int slices = 4; // define how many bands the equalizer has
-            double ***freq_slices = split(out, slices, 2048); // equal partitions of original N real-imaginary pairs - can be used in amplify!
-
-            for(int i=0; i<10;i++){
-                printf("%f+%fi\n",out[i][0],out[i][1]);
+            double max_amp = 0; // global max amplitude
+            fftw_complex ** results = malloc((num_of_frames + 1) * sizeof(fftw_complex *)); // list of results
+            for(int i = 0; i < num_of_frames; i++){
+                results[i] = malloc(2048 * sizeof(fftw_complex)); 
+                memcpy(results[i], execute(2048*i,new_data), 2048 * sizeof(fftw_complex); // copy result of execute into result
+                double max_amp_result = max_mag(out, 2048); // find local max
+                if(max_amp_result > max_amp){
+                    max_amp = max_amp_result; // check if bigger than global max
+                }
+                int slices = 4; // define how many bands the equalizer has
+                double ***freq_slices = split(results[i], slices, 2048); // equal partitions of original N real-imaginary pairs - can be used in amplify!
+                
             }
-            
-            // TODO: split the child process into 3 children processes
 
             exit(0);
         }
