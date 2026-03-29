@@ -29,17 +29,17 @@ void deinitialize(){
 }
 
 fftw_complex* execute_specific(int size, int starting_pos, double* last_frame){
-    fftw_complex in_specific = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * size);
-    fftw_complex out_specific = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * size);
+    fftw_complex* in_specific = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * size);
+    fftw_complex* out_specific = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * size);
 
     fftw_plan q = fftw_plan_dft_1d(N, in_specific, out_specific, FFTW_FORWARD, FFTW_ESTIMATE);
         for (int i = 0; i < N; i++) {
-        in_specific[i][0]= (frame)[i];
+        in_specific[i][0]= (last_frame)[i];
         in_specific[i][1]= (double) 0;
     }
 
     fftw_execute(q); 
     fftw_destroy_plan(q);
-    fftw_free(in); 
+    fftw_free(in_specific); 
     return out_specific;
 }
