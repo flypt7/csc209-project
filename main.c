@@ -11,6 +11,7 @@ int main() {
 
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
+    double amounts[4] = {2.0, 1.5, 1.0, 0.5};
 
     // channel children FDs
     int *channels[2];
@@ -62,10 +63,32 @@ int main() {
                 if(max_amp_result > max_amp){
                     max_amp = max_amp_result; // check if bigger than global max
                 }
-                int slices = 4; // define how many bands the equalizer has
-                double ***freq_slices = split(results[i], slices, 2048); // equal partitions of original N real-imaginary pairs - can be used in amplify!
-                
+                amplify(result[i],amounts);
+
+                // to do split by frames instead
+                int baseband[2];
+                int tenorband[2];
+                int altoband[2];
+                int trebleband[2];
+                bands[0] = baseband;
+                bands[1] = tenorband;
+                bands[2] = altoband;
+                bands[3] = trebleband;
+                int band_pid[4];
+
+                for (int bct = 0; bct < 4; bct++) { // bct = band count
+                    if (pipe(channels[bct]) == -1) {
+                        perror("Pipe");
+                        exit(1);
+                    }
+                    channel_pid[bct] = fork();
+            
+                    // children processes
+                    if (channel_pid[bct] == 0) {
+                        
+                    }
             }
+
 
             exit(0);
         }
