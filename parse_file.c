@@ -104,22 +104,25 @@ WAV_INFO *parse_file(char *filename) {
         perror("File smaller than .wav header (subchunk2_size)");
         exit(1);
     }
-    if (fread(&(wav_info->num_samples), sizeof(int), 1, fp) == 0) {
+    if (fread(&(wav_info->pcm_size), sizeof(int), 1, fp) == 0) {
         printf("Error reading subchunk2 size.\n");
         exit(1);
     }
+
+    wav_info->num_samples = wav_info->pcm_size / wav_info->num_channels;
 
     printf("Channels: %d\n", wav_info->num_channels);
     printf("Sample rate: %d\n", wav_info->sample_rate);
     printf("Bit depth: %d\n", wav_info->bit_depth);
 
     if (wav_info->num_channels == 1) {
-        printf("Number of samples (over %d channel): %d\n", wav_info->num_channels, wav_info->num_samples);
+        printf("Number of samples (over %d channel): %d\n", wav_info->num_channels, wav_info->pcm_size);
         printf("Mono audio detected - file will be converted to dual channel split mono.\n");
     } else {
-        printf("Number of samples (over %d channels): %d\n", wav_info->num_channels, wav_info->num_samples);
-
+        printf("Number of samples (over %d channels): %d\n", wav_info->num_channels, wav_info->pcm_size);
     }
+    
+    printf("Number of samples per channel: %d\n", wav_info->num_samples);
 
     // Now, fill the pcm data arrays
     fill_pcm(wav_info, fp);    
