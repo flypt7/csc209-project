@@ -2,7 +2,8 @@
 #define FFTW_HELPER_H
 
 // Function declarations (prototypes)
-void intialization();
-fftw_complex** execute(double* new_data);
-void deintialize();
+void initialize();
+fftw_complex* execute(int starting_pos, double* new_data);
+void deinitialize();
+fftw_complex* execute_specific(int size, int starting_pos, double* last_frame);
 #endif
