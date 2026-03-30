@@ -49,52 +49,63 @@ int main() {
 
                 }
             }
-            double *new_data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
+            double *data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
 
-            //TODO: split into frames of size 2048 
             int num_of_frames = info->num_samples / 2048;
             int last_frame_size = info->num_samples % 2048;
             double max_amp = 0; // global max amplitude
-            fftw_complex ** results = malloc((num_of_frames + 1) * sizeof(fftw_complex *)); // list of results
-            for(int i = 0; i < num_of_frames; i++){
-                results[i] = malloc(2048 * sizeof(fftw_complex)); 
-                memcpy(results[i], execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); // copy result of execute into result
-                double max_amp_result = max_mag(results[i], 2048); // find local max
-                if(max_amp_result > max_amp){
-                    max_amp = max_amp_result; // check if bigger than global max
+
+            int worker_amount = 20; // number of parallel workers
+            // Allocate an array of pipes
+            int (*workers)[2] = malloc(sizeof(int[2]) * num_samples);
+
+            // Allocate an array of PIDs
+            pid_t *worker_pid = malloc(sizeof(pid_t) * num_samples);
+
+            for (int i = 0; i < num_samples; i++) {
+                // Create pipe for this grandchild
+                if (pipe(channels[i]) == -1) {
+                    perror("pipe");
+                    exit(1);
                 }
-                amplify(result[i],amounts);
+                pid_t pid = fork();
+                if (pid == -1) {
+                    perror("fork");
+                    exit(1);
+                }
 
-                // to do split by frames instead
-                int baseband[2];
-                int tenorband[2];
-                int altoband[2];
-                int trebleband[2];
-                bands[0] = baseband;
-                bands[1] = tenorband;
-                bands[2] = altoband;
-                bands[3] = trebleband;
-                int band_pid[4];
-
-                for (int bct = 0; bct < 4; bct++) { // bct = band count
-                    if (pipe(channels[bct]) == -1) {
-                        perror("Pipe");
-                        exit(1);
+                if (pid == 0) {
+                    // IN GRANDCHILD               pipe_tbd mean pipe to be determined i am not sure which pipe from workers we should use
+                    int size_of_frame, index; // Size of frame will be 2048 for all but last frame
+                    read(pipe_tbd[0], size_of_frame, sizeof(int)); // we give this size in input pipe from parent
+                    read(pipe_tbd[0], index, sizeof(int)); // we give this index in input pipe from parent
+                    double* result = calculate(i); // do the calculations (i.e fftw, amplify, ifftw)
+                    for(int j = 0; j < size_of_frame; j++){
+                        data[i*2048+j]=result[j]; // copy result into data array
                     }
-                    channel_pid[bct] = fork();
-            
-                    // children processes
-                    if (channel_pid[bct] == 0) {
-                        
-                    }
+                    free(result); // free result from memory
+                    write(pipe_tbd[1], 1, 4); // write completion status (1 success, -1 for failure?)
+                    close(pipe_tbd[i][1]); // close write end
+                    exit(0);
+                } else {
+                    // --- PARENT ---
+                    child_pid[i] = pid;
+                    close(channels[i][0]); // completely unfinished do this is not what will happen
+                }                           
             }
-
-
             exit(0);
         }
-
     }
-    // TODO: parent process (will recombine post-amplification = wait calls etc.)
-    return 0;       
-           
+    return 0;                  
+}
+
+
+calculate(int i){
+    double* result = malloc(2048 * sizeof(fftw_complex)); 
+    memcpy(results, execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); // copy result of execute into result
+    double max_amp_result = max_mag(results[i], 2048); // find local max
+    if(max_amp_result > max_amp){
+        max_amp = max_amp_result; // check if bigger than global max
+    }   
+    amplify(result,amounts); 
 }
