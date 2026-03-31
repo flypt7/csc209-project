@@ -66,6 +66,16 @@ WAV_INFO *parse_file(char *filename) {
     // Need (1) number of channels (bits 22-23), (2) sample rate (bits 24-27), (3) bit depth (bits 34-35)
     WAV_INFO *wav_info = malloc(sizeof(WAV_INFO)); 
 
+    // Reading metadata
+    if (fseek(fp, 0, SEEK_SET) == -1) {
+        perror("Error finding start of file:");
+        exit(1);
+    }
+    if (fread(&(wav_info->metadata), 44, 1, fp) == 0) {
+        printf("Error reading metadata.\n");
+        exit(1);
+    }
+
     // Reading number of channels
     if (fseek(fp, 22, SEEK_SET) == -1) {
         perror("File smaller than .wav header (num_channels)");
