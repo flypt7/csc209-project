@@ -44,8 +44,9 @@ int main() {
                 if (info->num_channels == 2) {
                     pcm_data = info->right_channel_pcm;
                 }
-                else { // mono = use left channel PCM
-                    pcm_data = info->left_channel_pcm;
+                else { // mono = ignore right channel
+                    // OLD CODE: pcm_data = info->left_channel_pcm;
+
 
                 }
             }
@@ -96,6 +97,99 @@ int main() {
             exit(0);
         }
     }
+    // PARENT PROCESS - combine channels back together
+    double *modified_left;
+    double *modified_right;
+
+    // Close the write ends of the pipes - the parent won't be writing anything to them
+    close(lchannel[1]);
+    close(rchannel[1]);
+
+    // Create the fd_set to check for readable input from children
+    fd_set read_fds;
+    int maxfd;
+
+    // Set up fd_set with channel file descriptors
+    FD_ZERO(&read_fds);
+    FD_SET(lchannel[0], &read_fds);
+    FD_SET(rchannel[0], &read_fds);
+
+    if (lchannel[0] > rchannel[0]) {
+        maxfd = lchannel[0];
+    } else {
+        maxfd = rchannel[0];
+    }
+
+    // TODO: pipe can be used to send pointer to double *data over
+
+    int reads = 0;
+
+    while (reads < 2) {
+        if (select(maxfd + 1, &read_fds, NULL, NULL, NULL) == -1) {
+            perror("Select channel-parent");
+            return 1;
+        } else {
+            // left channel has written to its pipe
+            if (FD_ISSET(lchannel[0], &read_fds) > 0) {
+                read(lchannel[0], &modified_left, sizeof(double));
+            } else {
+                // right channel has to be set
+                read(rchannel[0], &modified_right, sizeof(double));
+            }
+
+            // select modifies fd_set so we have to reset it
+            FD_ZERO(&read_fds);
+            FD_SET(lchannel[0], &read_fds);
+            FD_SET(rchannel[0], &read_fds);
+
+            reads++;
+        }
+    }
+
+    // we have read all the pointers to samples - now order them!
+    double *modified_pcm = malloc(sizeof(double) * info->pcm_size);
+
+    int l = 0;
+    int r = 0;
+
+    // TODO: this loop could be implemented only using i, as integer division
+    // would lead to i/2 = 0, 0, 1, 1, 2, 2, ... as we increment i
+
+    for (int i = 0; i < info->num_samples; i++) {
+        if (i % 2 == 0) { // even modulo => left channel
+            modified_pcm[i] = modified_left[l];
+            l++;
+        } else if (info->num_channels == 2) { // odd modulo + stereo => right channel
+            modified_pcm[i] = modified_right[r];
+            r++;
+        }
+    }
+
+    // create new file
+    FILE *new_file = fopen("modified.wav", "wb");
+
+    if (new_file == NULL) {
+        perror("Error opening new file:");
+        return -1;
+    }
+
+    // write metadata
+    if (fwrite(&(info->metadata), 44, 1, new_file) != 44) {
+        printf("Error writing metadata to new file.\n")
+        close(new_file);
+        return 1;
+    }
+
+    // write data
+    if (fwrite(modified_pcm, sizeof(double) * info->pcm_size, 1, new_file) != info->pcm_size) {
+        printf("Error writing PCM data to new file.\n");
+        close(new_file);
+        return 1
+    }
+
+    // we are done using the new file so we can close it
+    close(new_file);
+
     return 0;                  
 }
 
