@@ -109,10 +109,10 @@ int main() {
     FD_SET(channels[0], &read_fds);
     FD_SET(rchannels[0], &read_fds);
 
-    if (lchannel[0] > rchannel[0]) {
-        maxfd = channel[0][0];
+    if (channels[0][0] > channels[1][0]) {
+        maxfd = channels[0][0];
     } else {
-        maxfd = rchannel[0];
+        maxfd = channels[1][0];
     }
 
     // TODO: pipe can be used to send pointer to double *data over
