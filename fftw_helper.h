@@ -3,7 +3,8 @@
 
 // Function declarations (prototypes)
 void initialize();
-fftw_complex* execute(int starting_pos, double* new_data);
+fftw_complex* fft_execute(int starting_pos, double* frame);
+fftw_complex* ifft_execute(int starting_pos, fftw_complex* frame);
 void deinitialize();
-fftw_complex* execute_specific(int size, int starting_pos, double* last_frame);
+fftw_complex* execute_fft_specific(int size, int starting_pos, double* last_frame);
 #endif

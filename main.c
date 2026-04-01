@@ -11,7 +11,7 @@ int main() {
 
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
-    double amounts[4] = {2.0, 1.5, 1.0, 0.5};
+    double amounts[4] = {2.0, 1.5, 1.0, 0.5}; // Default values we will change eventually
 
     // channel children FDs
     int *channels[2];
@@ -58,12 +58,12 @@ int main() {
 
             int worker_amount = 20; // number of parallel workers
             // Allocate an array of pipes
-            int (*workers)[2] = malloc(sizeof(int[2]) * num_samples);
+            int (*workers)[2] = malloc(sizeof(int[2]) * worker_amount);
 
             // Allocate an array of PIDs
-            pid_t *worker_pid = malloc(sizeof(pid_t) * num_samples);
+            pid_t *worker_pid = malloc(sizeof(pid_t) * worker_amount);
 
-            for (int i = 0; i < num_samples; i++) {
+            for (int i = 0; i < worker_amount; i++) {
                 // Create pipe for this grandchild
                 if (pipe(channels[i]) == -1) {
                     perror("pipe");
@@ -80,7 +80,7 @@ int main() {
                     int size_of_frame, index; // Size of frame will be 2048 for all but last frame
                     read(pipe_tbd[0], size_of_frame, sizeof(int)); // we give this size in input pipe from parent
                     read(pipe_tbd[0], index, sizeof(int)); // we give this index in input pipe from parent
-                    double* result = calculate(i); // do the calculations (i.e fftw, amplify, ifftw)
+                    double* result = calculate(i); // do the calculations (i.e fftw, amplify, ifftw) - see method below
                     for(int j = 0; j < size_of_frame; j++){
                         data[i*2048+j]=result[j]; // copy result into data array
                     }
@@ -89,7 +89,7 @@ int main() {
                     close(pipe_tbd[i][1]); // close write end
                     exit(0);
                 } else {
-                    // --- PARENT ---
+                    // --- Child (not grandchild) this is worker manager ---
                     child_pid[i] = pid;
                     close(channels[i][0]); // completely unfinished do this is not what will happen
                 }                           
@@ -159,7 +159,7 @@ int main() {
         if (i % 2 == 0) { // even modulo => left channel
             modified_pcm[i] = modified_left[l];
             l++;
-        } else if (info->num_channels == 2) { // odd modulo + stereo => right channel
+        } else if (info->num_channels == 2) { // odd modulo AND stereo => right channel
             modified_pcm[i] = modified_right[r];
             r++;
         }
@@ -194,12 +194,19 @@ int main() {
 }
 
 
-calculate(int i){
-    double* result = malloc(2048 * sizeof(fftw_complex)); 
-    memcpy(results, execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); // copy result of execute into result
+double* calculate(int i){
+    fftw_complex* complex_result = malloc(2048 * sizeof(fftw_complex)); 
+    memcpy(complex_result, fft_execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); // copy result of execute into result
     double max_amp_result = max_mag(results[i], 2048); // find local max
     if(max_amp_result > max_amp){
         max_amp = max_amp_result; // check if bigger than global max
     }   
-    amplify(result,amounts); 
+    amplify(amounts, complex_result, 2048); 
+    memcpy(complex_result, ifft_execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); 
+    double* real_result = malloc(2048 * sizeof(double));
+    for(int j = 0; j < 2048; j++){
+        real_result[j] = complex_result[j][0];
+    }
+    free(complex_result);
+    return real_result;
 }
