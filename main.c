@@ -14,12 +14,7 @@ int main() {
     double amounts[4] = {2.0, 1.5, 1.0, 0.5}; // Default values we will change eventually
 
     // channel children FDs
-    int *channels[2];
-    int lchannel[2];
-    int rchannel[2];
-
-    channels[0] = lchannel;
-    channels[1] = rchannel;
+    int channels[2][2];
 
     int channel_pid[2];
 
@@ -46,7 +41,7 @@ int main() {
                 }
                 else { // mono = ignore right channel
                     // OLD CODE: pcm_data = info->left_channel_pcm;
-
+                    ct++;
 
                 }
             }
@@ -102,8 +97,8 @@ int main() {
     double *modified_right;
 
     // Close the write ends of the pipes - the parent won't be writing anything to them
-    close(lchannel[1]);
-    close(rchannel[1]);
+    close(channels[0][1]);
+    close(channels[1][1]);
 
     // Create the fd_set to check for readable input from children
     fd_set read_fds;
@@ -111,11 +106,11 @@ int main() {
 
     // Set up fd_set with channel file descriptors
     FD_ZERO(&read_fds);
-    FD_SET(lchannel[0], &read_fds);
-    FD_SET(rchannel[0], &read_fds);
+    FD_SET(channels[0], &read_fds);
+    FD_SET(rchannels[0], &read_fds);
 
     if (lchannel[0] > rchannel[0]) {
-        maxfd = lchannel[0];
+        maxfd = channel[0][0];
     } else {
         maxfd = rchannel[0];
     }
@@ -130,17 +125,17 @@ int main() {
             return 1;
         } else {
             // left channel has written to its pipe
-            if (FD_ISSET(lchannel[0], &read_fds) > 0) {
-                read(lchannel[0], &modified_left, sizeof(double));
+            if (FD_ISSET(channels[0][0], &read_fds) > 0) {
+                read(channels[0][0], &modified_left, sizeof(double));
             } else {
                 // right channel has to be set
-                read(rchannel[0], &modified_right, sizeof(double));
+                read(channels[1][0], &modified_right, sizeof(double));
             }
 
             // select modifies fd_set so we have to reset it
             FD_ZERO(&read_fds);
-            FD_SET(lchannel[0], &read_fds);
-            FD_SET(rchannel[0], &read_fds);
+            FD_SET(channels[0][0], &read_fds);
+            FD_SET(channels[1][0], &read_fds);
 
             reads++;
         }
@@ -184,7 +179,7 @@ int main() {
     if (fwrite(modified_pcm, sizeof(double) * info->pcm_size, 1, new_file) != info->pcm_size) {
         printf("Error writing PCM data to new file.\n");
         close(new_file);
-        return 1
+        return 1;
     }
 
     // we are done using the new file so we can close it
