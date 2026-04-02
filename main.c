@@ -12,6 +12,8 @@ int main() {
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
     double amounts[4] = {2.0, 1.5, 1.0, 0.5}; // Default values we will change eventually
+    int N = 2048; // size of complete frame
+    initialize(N);
 
     // channel children FDs
     int channels[2][2];
@@ -46,10 +48,10 @@ int main() {
             }
             double *data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
             
-            int N = 2048; // size of complete frame
             int num_of_frames = info->num_samples / N;
             int last_frame_size = info->num_samples % N;
             double max_amp = 0; // global max amplitude
+            
 
             int worker_amount = 20; // number of parallel workers
             // Allocate an array of pipes
@@ -91,11 +93,10 @@ int main() {
                         close(workers[i][1][0]);
                         exit(-1);
                     }
-                    if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
+                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
                         status = -1; // read error
                     }
-
-                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent                    
+                    if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
                         status = -1; // read error
                     } 
                     while(index>-1){
@@ -277,6 +278,7 @@ int main() {
     }
 
     // we are done using the new file so we can close it
+    deinitialize();
     fclose(new_file);
     return 0;                  
 }

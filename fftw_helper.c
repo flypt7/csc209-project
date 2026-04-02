@@ -16,7 +16,7 @@ void initialize(int size){
 
 fftw_complex* fft_execute(int starting_pos, double* frame){
     for (int i = 0; i < N; i++) {
-        in[i][0]= (frame)[starting_pos+i];
+        in[i][0]= frame[starting_pos+i];
         in[i][1]= (double) 0;
     }
     fftw_execute(p_forward); 
