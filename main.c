@@ -91,10 +91,11 @@ int main() {
                         close(workers[i][1][0]);
                         exit(-1);
                     }
-                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
+                    if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
                         status = -1; // read error
                     }
-                    if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
+
+                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent                    
                         status = -1; // read error
                     } 
                     while(index>-1){

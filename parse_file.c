@@ -10,11 +10,11 @@
  */
 void fill_pcm(WAV_INFO *wav_info, FILE *fp) {
     
-    wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
+    wav_info->left_channel_pcm = malloc(sizeof(double) * wav_info->num_samples);
 
     // Only malloc right channel if audio is stereo (will not be used otherwise)
     if (wav_info->num_channels == 2) {
-        wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples / wav_info->num_channels);
+        wav_info->right_channel_pcm = malloc(sizeof(double) * wav_info->num_samples);
     }    
 
     // Now, read audio data (starts at bit 44 of audio file)
