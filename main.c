@@ -13,7 +13,6 @@ int main() {
     WAV_INFO *info = parse_file("gloop.wav");
     double amounts[4] = {1,1,1,1}; // Default values we will change eventually
     int N = 2048; // size of complete frame
-    initialize(N);
 
     // channel children FDs
     int channels[2][2];
@@ -75,6 +74,7 @@ int main() {
 
                 if (pid == 0) {
                     // IN GRANDCHILD
+                    initialize(N);
                     for(int j = 0; j < i; j++){
                         close(workers[j][0][0]);
                         close(workers[j][0][1]);
@@ -123,6 +123,7 @@ int main() {
                     }
                     close(workers[i][0][1]);
                     close(workers[i][1][0]);
+                    deinitialize();
                     exit(0);
                 } 
             }
@@ -281,7 +282,6 @@ int main() {
     }
 
     // we are done using the new file so we can close it
-    deinitialize();
     fclose(new_file);
     return 0;                  
 }
