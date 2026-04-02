@@ -89,8 +89,8 @@ int main() {
                     int status = 0;
 
                     if(write(workers[i][0][1], &status, sizeof(int)) != sizeof(int)){
-                        // close(workers[i][0][1]);
-                        // close(workers[i][1][0]);
+                        close(workers[i][0][1]);
+                        close(workers[i][1][0]);
                         exit(-1);
                     }
                     if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
@@ -140,7 +140,7 @@ int main() {
                 while(selection<0){
                     int availability;
                     if(read(workers[m][0][0],&availability,sizeof(int))!=sizeof(int)){
-                        for(int o = 0; o < 20; o++){
+                        for(int o = 0; o < worker_amount; o++){
                             close(workers[o][0][0]);
                             close(workers[o][1][1]);
                             exit(-1);
@@ -149,17 +149,17 @@ int main() {
                     if(availability == 0){
                         selection = m;
                     }
-                    m = (m+1) % 20;
+                    m = (m+1) % worker_amount;
                 }
                 if(write(workers[selection][1][1], &l, sizeof(int)) != sizeof(int)){
-                    for(int o = 0; o < 20; o++){
+                    for(int o = 0; o < worker_amount; o++){
                         close(workers[o][0][0]);
                         close(workers[o][1][1]);
                     }
                     exit(-1);
                 }
                 if(write(workers[selection][1][1], &N, sizeof(int)) != sizeof(int)){
-                    for(int o = 0; o < 20; o++){
+                    for(int o = 0; o < worker_amount; o++){
                         close(workers[o][0][0]);
                         close(workers[o][1][1]);
                     }
@@ -211,9 +211,10 @@ int main() {
 
     // TODO: pipe can be used to send pointer to double *data over
 
-    int reads = 0;
+    int lread = 0;
+    int rread = 0;
 
-    while (reads < 2) {
+    while (lread == 0 || rread == 0) {
         if (select(maxfd + 1, &read_fds, NULL, NULL, NULL) == -1) {
             perror("Select channel-parent");
             return 1;
@@ -224,9 +225,12 @@ int main() {
                 if((temp = read(channels[0][0], &modified_left, sizeof(double *))) == 0){
                     printf("%d\n", temp);
                 }
-            } else {
+                lread++;
+            } 
+            if (FD_ISSET(channels[0][0], &read_fds) > 0) {
                 // right channel has to be set
                 read(channels[1][0], &modified_right, sizeof(double *));
+                rread++;
             }
 
             // select modifies fd_set so we have to reset it
@@ -234,7 +238,7 @@ int main() {
             FD_SET(channels[0][0], &read_fds);
             FD_SET(channels[1][0], &read_fds);
 
-            reads++;
+            
         }
     }
 
@@ -252,7 +256,7 @@ int main() {
             modified_pcm[i] = modified_left[l];
             l++;
         } else if (info->num_channels == 2) { // odd modulo AND stereo => right channel
-            modified_pcm[i] = modified_right[r];
+            //modified_pcm[i] = modified_right[r];
             r++;
         }
     }
