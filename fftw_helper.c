@@ -23,10 +23,10 @@ fftw_complex* fft_execute(int starting_pos, double* frame){
     return out;
 }
 
-fftw_complex* ifft_execute(int starting_pos, fftw_complex* frame){
+fftw_complex* ifft_execute(fftw_complex* frame){
     for (int i = 0; i < N; i++) {
-        in[i][0]= frame[starting_pos+i][0];
-        in[i][1]= frame[starting_pos+i][1];
+        in[i][0]= frame[i][0];
+        in[i][1]= frame[i][1];
     }
     fftw_execute(p_backward); 
     return out;

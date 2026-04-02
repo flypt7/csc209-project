@@ -11,7 +11,7 @@ int main() {
 
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
-    double amounts[4] = {2.0, 1.5, 1.0, 0.5}; // Default values we will change eventually
+    double amounts[4] = {1,1,1,1}; // Default values we will change eventually
     int N = 2048; // size of complete frame
     initialize(N);
 
@@ -93,21 +93,21 @@ int main() {
                         // close(workers[i][1][0]);
                         exit(-1);
                     }
-                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
-                        status = -1; // read error
-                    }
                     if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
                         status = -1; // read error
                     } 
+                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
+                        status = -1; // read error
+                    }
                     while(index>-1){
                         fftw_complex* complex_result = malloc(N * sizeof(fftw_complex)); 
-                        memcpy(complex_result, fft_execute(N*i,data), N * sizeof(fftw_complex)); // copy result of execute into result
+                        memcpy(complex_result, fft_execute(N*index,data), N * sizeof(fftw_complex)); // copy result of execute into result
                         double max_amp_result = max_mag(complex_result, N); // find local max
                         if(max_amp_result > max_amp){
                             max_amp = max_amp_result; // check if bigger than global max
                         }   
                         amplify(amounts, complex_result, N); 
-                        memcpy(complex_result, ifft_execute(N*i,complex_result), N * sizeof(fftw_complex)); 
+                        memcpy(complex_result, ifft_execute(complex_result), N * sizeof(fftw_complex)); 
                         double* real_result = malloc(N * sizeof(double));
                         for(int j = 0; j < N; j++){
                             real_result[j] = complex_result[j][0];
@@ -118,8 +118,8 @@ int main() {
                         }
                         free(real_result); // free result from memory
                         write(workers[i][0][1], &status, sizeof(int)); // success
-                        read(workers[i][1][0], &size_of_frame, sizeof(int)); // we give this size in input pipe from parent
                         read(workers[i][1][0], &index, sizeof(int)); // we give this index in input pipe from parent
+                        read(workers[i][1][0], &size_of_frame, sizeof(int)); // we give this size in input pipe from parent
                     }
                     close(workers[i][0][1]);
                     close(workers[i][1][0]);
@@ -150,14 +150,14 @@ int main() {
                     }
                     m = (m+1) % 20;
                 }
-                if(write(workers[m][1][1], &l, sizeof(int)) != sizeof(int)){
+                if(write(workers[selection][1][1], &l, sizeof(int)) != sizeof(int)){
                     for(int o = 0; o < 20; o++){
                         close(workers[o][0][0]);
                         close(workers[o][1][1]);
                     }
                     exit(-1);
                 }
-                if(write(workers[m][1][1], &N, sizeof(int)) != sizeof(int)){
+                if(write(workers[selection][1][1], &N, sizeof(int)) != sizeof(int)){
                     for(int o = 0; o < 20; o++){
                         close(workers[o][0][0]);
                         close(workers[o][1][1]);
