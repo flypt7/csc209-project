@@ -71,10 +71,12 @@ WAV_INFO *parse_file(char *filename) {
         perror("Error finding start of file:");
         exit(1);
     }
-    if (fread(&(wav_info->metadata), 44, 1, fp) == 0) {
-        printf("Error reading metadata.\n");
-        exit(1);
-    }
+    for (int i = 0; i <= 11; i++) {
+        if (fread(&((wav_info->metadata)[i]), sizeof(int), 1, fp) == 0) {
+            printf("Error reading metadata.\n");
+            exit(1);
+        }
+    }    
 
     // Reading number of channels
     if (fseek(fp, 22, SEEK_SET) == -1) {
@@ -138,6 +140,8 @@ WAV_INFO *parse_file(char *filename) {
     fill_pcm(wav_info, fp);    
 
     printf("File parsing complete.\n");
+
+    fclose(fp);
 
     return wav_info;
 

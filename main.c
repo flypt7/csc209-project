@@ -42,25 +42,26 @@ int main() {
                 else { // mono = ignore right channel
                     // OLD CODE: pcm_data = info->left_channel_pcm;
                     ct++;
-
                 }
             }
             double *data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
-
-            int num_of_frames = info->num_samples / 2048;
-            int last_frame_size = info->num_samples % 2048;
+            
+            int N = 2048; // size of complete frame
+            int num_of_frames = info->num_samples / N;
+            int last_frame_size = info->num_samples % N;
             double max_amp = 0; // global max amplitude
 
             int worker_amount = 20; // number of parallel workers
             // Allocate an array of pipes
-            int (*workers)[2] = malloc(sizeof(int[2]) * worker_amount);
-
-            // Allocate an array of PIDs
-            pid_t *worker_pid = malloc(sizeof(pid_t) * worker_amount);
+            int workers[worker_amount][2][2];
 
             for (int i = 0; i < worker_amount; i++) {
                 // Create pipe for this grandchild
-                if (pipe(channels[i]) == -1) {
+                if (pipe(workers[i][0]) == -1) {
+                    perror("pipe");
+                    exit(1);
+                }
+                if (pipe(workers[i][1]) == -1) {
                     perror("pipe");
                     exit(1);
                 }
@@ -71,26 +72,102 @@ int main() {
                 }
 
                 if (pid == 0) {
-                    // IN GRANDCHILD               pipe_tbd mean pipe to be determined i am not sure which pipe from workers we should use
-                    int size_of_frame, index; // Size of frame will be 2048 for all but last frame
-                    read(pipe_tbd[0], size_of_frame, sizeof(int)); // we give this size in input pipe from parent
-                    read(pipe_tbd[0], index, sizeof(int)); // we give this index in input pipe from parent
-                    double* result = calculate(i); // do the calculations (i.e fftw, amplify, ifftw) - see method below
-                    for(int j = 0; j < size_of_frame; j++){
-                        data[i*2048+j]=result[j]; // copy result into data array
+                    // IN GRANDCHILD
+                    for(int j = 0; j < i; j++){
+                        close(workers[j][0][0]);
+                        close(workers[j][0][1]);
+                        close(workers[j][1][0]);
+                        close(workers[j][1][1]);
                     }
-                    free(result); // free result from memory
-                    write(pipe_tbd[1], 1, 4); // write completion status (1 success, -1 for failure?)
-                    close(pipe_tbd[i][1]); // close write end
+
+                    close(workers[i][0][0]); // close read end of worker to manager
+                    close(workers[i][1][1]); // close write end of manager to worker
+
+                    int size_of_frame, index; // Size of frame will be 2048 for all but last frame
+                    int status = 0;
+
+                    if(write(workers[i][0][1], &status, sizeof(int)) != sizeof(int)){
+                        close(workers[i][0][1]);
+                        close(workers[i][1][0]);
+                        exit(-1);
+                    }
+                    if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
+                        status = -1; // read error
+                    }
+                    if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
+                        status = -1; // read error
+                    } 
+                    while(index>-1){
+                        fftw_complex* complex_result = malloc(N * sizeof(fftw_complex)); 
+                        memcpy(complex_result, fft_execute(N*i,data), N * sizeof(fftw_complex)); // copy result of execute into result
+                        double max_amp_result = max_mag(complex_result, N); // find local max
+                        if(max_amp_result > max_amp){
+                            max_amp = max_amp_result; // check if bigger than global max
+                        }   
+                        amplify(amounts, complex_result, N); 
+                        memcpy(complex_result, ifft_execute(N*i,complex_result), N * sizeof(fftw_complex)); 
+                        double* real_result = malloc(N * sizeof(double));
+                        for(int j = 0; j < N; j++){
+                            real_result[j] = complex_result[j][0];
+                        }
+                        free(complex_result);
+                        for(int j = 0; j < size_of_frame; j++){
+                            data[i*N+j]=real_result[j]; // copy result into data array
+                        }
+                        free(real_result); // free result from memory
+                        write(workers[i][0][1], &status, sizeof(int)); // success
+                        read(workers[i][1][0], &size_of_frame, sizeof(int)); // we give this size in input pipe from parent
+                        read(workers[i][1][0], &index, sizeof(int)); // we give this index in input pipe from parent
+                    }
+                    close(workers[i][0][1]);
+                    close(workers[i][1][0]);
                     exit(0);
-                } else {
-                    // --- Child (not grandchild) this is worker manager ---
-                    child_pid[i] = pid;
-                    close(channels[i][0]); // completely unfinished do this is not what will happen
-                }                           
+                } 
             }
-            exit(0);
-        }
+            // --- Child (not grandchild) this is worker manager ---
+            for(int p = 0; p < worker_amount; p++){
+                close(workers[p][0][1]); // close write end of worker to manager
+                close(workers[p][1][0]); // close read end of manager to worker
+            }
+
+            int m = 0;
+            for(int l = 0; l < num_of_frames; l++){
+                int selection = -1;
+                while(selection<0){
+                    int availability;
+                    if(read(workers[m][0][0],&availability,sizeof(int))!=sizeof(int)){
+                        for(int o = 0; o < 20; o++){
+                            close(workers[o][0][0]);
+                            close(workers[o][1][1]);
+                            exit(-1);
+                        }
+                    }
+                    if(availability == 0){
+                        selection = m;
+                    }
+                    m = (m+1) % 20;
+                }
+                if(write(workers[m][1][1], &l, sizeof(int)) != sizeof(int)){
+                    for(int o = 0; o < 20; o++){
+                        close(workers[o][0][0]);
+                        close(workers[o][1][1]);
+                    }
+                    exit(-1);
+                }
+                if(write(workers[m][1][1], &N, sizeof(int)) != sizeof(int)){
+                    for(int o = 0; o < 20; o++){
+                        close(workers[o][0][0]);
+                        close(workers[o][1][1]);
+                    }
+                    exit(-1);
+                }
+            }
+            for(int p = 0; p < worker_amount; p++){
+                close(workers[p][0][0]); // close write end of worker to manager
+                close(workers[p][1][1]); // close read end of manager to worker
+            }
+            exit(0);  // completely unfinished do this is not what will happen
+            }                           
     }
     // PARENT PROCESS - combine channels back together
     double *modified_left;
@@ -106,8 +183,8 @@ int main() {
 
     // Set up fd_set with channel file descriptors
     FD_ZERO(&read_fds);
-    FD_SET(channels[0], &read_fds);
-    FD_SET(rchannels[0], &read_fds);
+    FD_SET(channels[0][0], &read_fds);
+    FD_SET(channels[1][0], &read_fds);
 
     if (channels[0][0] > channels[1][0]) {
         maxfd = channels[0][0];
@@ -150,7 +227,7 @@ int main() {
     // TODO: this loop could be implemented only using i, as integer division
     // would lead to i/2 = 0, 0, 1, 1, 2, 2, ... as we increment i
 
-    for (int i = 0; i < info->num_samples; i++) {
+    for (unsigned int i = 0; i < info->num_samples; i++) {
         if (i % 2 == 0) { // even modulo => left channel
             modified_pcm[i] = modified_left[l];
             l++;
@@ -169,39 +246,22 @@ int main() {
     }
 
     // write metadata
-    if (fwrite(&(info->metadata), 44, 1, new_file) != 44) {
-        printf("Error writing metadata to new file.\n")
-        close(new_file);
-        return 1;
+    for (int i = 0; i <= 11; i++) {
+        if (fwrite(&((info->metadata)[i]), sizeof(int), 1, new_file) == 0) {
+            printf("Error writing metadata to new file.\n");
+            fclose(new_file);
+            return 1;
+        }
     }
 
     // write data
-    if (fwrite(modified_pcm, sizeof(double) * info->pcm_size, 1, new_file) != info->pcm_size) {
+    if (fwrite(modified_pcm, sizeof(double) * info->pcm_size, 1, new_file) == 0) {
         printf("Error writing PCM data to new file.\n");
-        close(new_file);
+        fclose(new_file);
         return 1;
     }
 
     // we are done using the new file so we can close it
-    close(new_file);
-
+    fclose(new_file);
     return 0;                  
-}
-
-
-double* calculate(int i){
-    fftw_complex* complex_result = malloc(2048 * sizeof(fftw_complex)); 
-    memcpy(complex_result, fft_execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); // copy result of execute into result
-    double max_amp_result = max_mag(results[i], 2048); // find local max
-    if(max_amp_result > max_amp){
-        max_amp = max_amp_result; // check if bigger than global max
-    }   
-    amplify(amounts, complex_result, 2048); 
-    memcpy(complex_result, ifft_execute(2048*i,new_data), 2048 * sizeof(fftw_complex)); 
-    double* real_result = malloc(2048 * sizeof(double));
-    for(int j = 0; j < 2048; j++){
-        real_result[j] = complex_result[j][0];
-    }
-    free(complex_result);
-    return real_result;
 }

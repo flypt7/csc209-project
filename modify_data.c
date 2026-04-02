@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fftw3.h>
 #include "modify_data.h"
 #define PI 3.14159265358979323846
 
@@ -100,7 +101,7 @@ double *complex_to_mag(double (*data)[2], int size) {
     return mag_data;
 }
 
-void amplify(double * amounts, fftw_complex * data, int size){
+void amplify(double * amounts, fftw_complex* data, int size){
     int bands = 4;
     for (int i = 0; i < size; i++) {
         data[i][0] *= amounts[(bands * i) / size];

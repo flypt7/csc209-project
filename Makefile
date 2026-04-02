@@ -6,7 +6,7 @@ LIBS = -lm -I/usr/include/mkl/fftw -lmkl_rt
 all: eq
 
 eq: main.o parse_file.o fftw_helper.o modify_data.o
-	gcc ${FLAGS} -o $@ $^ 
+	gcc ${FLAGS} -o $@ $^ ${LIBS}
 
 main.o: main.c
 	gcc ${FLAGS} -c $< ${LIBS}
