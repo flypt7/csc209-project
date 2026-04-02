@@ -125,6 +125,7 @@ int main() {
                 } 
             }
             // --- Child (not grandchild) this is worker manager ---
+            close(channels[ct][0]);
             for(int p = 0; p < worker_amount; p++){
                 close(workers[p][0][1]); // close write end of worker to manager
                 close(workers[p][1][0]); // close read end of manager to worker
@@ -162,11 +163,21 @@ int main() {
                     exit(-1);
                 }
             }
+            // Manager is done - close up shop and send message to combiner parent
+            if(write(channels[ct][1],&data,sizeof(double *)) != sizeof(double *)){
+                for(int p = 0; p < worker_amount; p++){
+                    close(workers[p][0][0]); // close write end of worker to manager
+                    close(workers[p][1][1]); // close read end of manager to worker
+                }
+                close(channels[ct][1]);
+                exit(-1);
+            }
             for(int p = 0; p < worker_amount; p++){
                 close(workers[p][0][0]); // close write end of worker to manager
                 close(workers[p][1][1]); // close read end of manager to worker
             }
-            exit(0);  // completely unfinished do this is not what will happen
+            close(channels[ct][1]);
+            exit(0);
             }                           
     }
     // PARENT PROCESS - combine channels back together
@@ -203,10 +214,13 @@ int main() {
         } else {
             // left channel has written to its pipe
             if (FD_ISSET(channels[0][0], &read_fds) > 0) {
-                read(channels[0][0], &modified_left, sizeof(double));
+                int temp;
+                if((temp = read(channels[0][0], &modified_left, sizeof(double *))) == 0){
+                    printf("%d\n", temp);
+                }
             } else {
                 // right channel has to be set
-                read(channels[1][0], &modified_right, sizeof(double));
+                read(channels[1][0], &modified_right, sizeof(double *));
             }
 
             // select modifies fd_set so we have to reset it

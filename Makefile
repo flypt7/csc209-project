@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-FLAGS = -Wall -Wextra
+FLAGS = -Wall -Wextra -g
 LIBS = -lm -I/usr/include/mkl/fftw -lmkl_rt
 
 all: eq

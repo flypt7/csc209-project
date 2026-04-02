@@ -8,11 +8,11 @@
 /*
  * Data preparation methods (pre-FFT)
 */
-double normalize(int i, int bit_depth){
+double normalize(double i, int bit_depth){
     return i / (pow(2, bit_depth) - 1);
 }
 
-double hann(int i, int size){
+double hann(double i, int size){
     return pow(sin(PI * i / size), 2);
 }
 
