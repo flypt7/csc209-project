@@ -89,8 +89,8 @@ int main() {
                     int status = 0;
 
                     if(write(workers[i][0][1], &status, sizeof(int)) != sizeof(int)){
-                        close(workers[i][0][1]);
-                        close(workers[i][1][0]);
+                        // close(workers[i][0][1]);
+                        // close(workers[i][1][0]);
                         exit(-1);
                     }
                     if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
@@ -175,8 +175,11 @@ int main() {
                 exit(-1);
             }
             for(int p = 0; p < worker_amount; p++){
-                close(workers[p][0][0]); // close write end of worker to manager
-                close(workers[p][1][1]); // close read end of manager to worker
+                int done_signal = -1;
+                write(workers[p][1][1], &done_signal, sizeof(int));
+                write(workers[p][1][1], &N, sizeof(int));
+                close(workers[p][0][0]); // close read end of worker to manager
+                close(workers[p][1][1]); // close write end of manager to worker
             }
             close(channels[ct][1]);
             exit(0);
