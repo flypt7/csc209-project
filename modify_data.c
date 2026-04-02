@@ -9,17 +9,16 @@
  * Data preparation methods (pre-FFT)
 */
 double normalize(double i, int bit_depth){
-    return i / (pow(2, bit_depth) - 1);
+    return i / (pow(2, bit_depth - 1));
 }
 
 double hann(double i, int size){
-    return pow(sin(PI * i / size), 2);
+    return pow(sin(PI * i / (size-1)), 2);
 }
 
 double *prepare_data(double *data, int bit_depth, int size){ 
     for(int i = 0; i < size; i++){
         data[i] = normalize(data[i], bit_depth);
-        data[i] = hann(data[i], size);
     }
     return data;
 }

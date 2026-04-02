@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
+#include <poll.h>
 #include "fftw_helper.h"
 #include "parse_file.h"
 #include "modify_data.h"
@@ -46,6 +48,7 @@ int main() {
                 }
             }
             double *data = prepare_data(pcm_data, info->bit_depth, info->num_samples);
+            double *new_data = malloc(sizeof(double)* info->num_samples);
             
             int num_of_frames = info->num_samples / N;
             int last_frame_size = info->num_samples % N;
@@ -101,23 +104,44 @@ int main() {
                     }
                     while(index>-1){
                         fftw_complex* complex_result = malloc(N * sizeof(fftw_complex)); 
-                        memcpy(complex_result, fft_execute(N*index,data), N * sizeof(fftw_complex)); // copy result of execute into result
+                        double* real_result = malloc(N * sizeof(double));
+                        for(int j = 0; j < N; j++){
+                            real_result[j] = data[(int)(N*index*.5+j)];
+                            real_result[j] *= hann(j,N);
+                        }
+                        memcpy(complex_result, fft_execute(0,real_result), N * sizeof(fftw_complex)); // copy result of execute into result
                         double max_amp_result = max_mag(complex_result, N); // find local max
                         if(max_amp_result > max_amp){
                             max_amp = max_amp_result; // check if bigger than global max
                         }   
                         amplify(amounts, complex_result, N); 
                         memcpy(complex_result, ifft_execute(complex_result), N * sizeof(fftw_complex)); 
-                        double* real_result = malloc(N * sizeof(double));
                         for(int j = 0; j < N; j++){
                             real_result[j] = complex_result[j][0];
+                            real_result[j] /= N;
                         }
                         free(complex_result);
-                        for(int j = 0; j < size_of_frame; j++){
-                            data[i*N+j]=real_result[j]; // copy result into data array
+                        size_t written = 0;
+                        size_t bytes = sizeof(double) * N;
+
+                        write(workers[i][0][1], &index, sizeof(int));    
+                        write(workers[i][0][1], &size_of_frame, sizeof(int));    
+
+                        while (written < bytes) {
+                        ssize_t w = write(workers[i][0][1], (const char*)real_result + written, bytes - written);
+
+                        if (w < 0) {
+                            perror("write");
+                            exit(1);
                         }
-                        free(real_result); // free result from memory
-                        write(workers[i][0][1], &status, sizeof(int)); // success
+
+                        if (w == 0) {
+                            fprintf(stderr, "Pipe closed while writing\n");
+                            exit(1);
+                        }
+
+                        written += w;
+                        }
                         read(workers[i][1][0], &index, sizeof(int)); // we give this index in input pipe from parent
                         read(workers[i][1][0], &size_of_frame, sizeof(int)); // we give this size in input pipe from parent
                     }
@@ -134,47 +158,90 @@ int main() {
                 close(workers[p][1][0]); // close read end of manager to worker
             }
 
-            int m = 0;
-            for(int l = 0; l < num_of_frames; l++){
-                int selection = -1;
-                while(selection<0){
-                    int availability;
-                    if(read(workers[m][0][0],&availability,sizeof(int))!=sizeof(int)){
-                        for(int o = 0; o < 20; o++){
-                            close(workers[o][0][0]);
-                            close(workers[o][1][1]);
-                            exit(-1);
+            struct pollfd pfds[worker_amount];
+
+            for (int i = 0; i < worker_amount; i++) {
+                pfds[i].fd = workers[i][0][0];   // worker → manager pipe
+                pfds[i].events = POLLIN;         // we want to know when data arrives
+                pfds[i].revents = 0;
+            }
+
+            int curr_frame = 0;
+            int total_frames = num_of_frames;
+            int frames_remaining = total_frames;
+
+            // prime workers
+            for (int i = 0; i < worker_amount && curr_frame < total_frames; i++) {
+                int send_index = curr_frame;
+                int send_size  = N;
+                write(workers[i][1][1], &send_index, sizeof(int));
+                write(workers[i][1][1], &send_size,  sizeof(int));
+                curr_frame++;
+            }
+
+            while (frames_remaining > 0) {
+                int ready = poll(pfds, worker_amount, -1);
+                if (ready < 0) { perror("poll"); exit(1); }
+
+                for (int i = 0; i < worker_amount; i++) {
+                    if (pfds[i].revents & POLLIN) {
+
+                        int frame_index;
+                        read(pfds[i].fd, &frame_index, sizeof(int));
+
+                        int size_of_frame;
+                        read(pfds[i].fd, &size_of_frame, sizeof(int));
+
+                        double *frame_buf = malloc(sizeof(double) * size_of_frame);
+                        ssize_t need = sizeof(double) * size_of_frame;
+                        ssize_t got = 0;
+
+                        while (got < need) {
+                            ssize_t r = read(pfds[i].fd, (char*)frame_buf + got, need - got);
+                            if (r < 0) { perror("read"); exit(1); }
+                            if (r == 0) { fprintf(stderr, "EOF before full buffer received\n"); exit(1); }
+                            got += r;
+                        }
+
+                        int frame_start = frame_index * (N/2);
+                        for (int j = 0; j < size_of_frame; j++) {
+                            new_data[frame_start + j] += frame_buf[j];
+                        }
+                        free(frame_buf);
+
+                        frames_remaining--;
+
+                        if (curr_frame < total_frames) {
+                            int send_index = curr_frame;
+                            int send_size  = N;
+                            write(workers[i][1][1], &send_index, sizeof(int));
+                            write(workers[i][1][1], &send_size,  sizeof(int));
+                            curr_frame++;
                         }
                     }
-                    if(availability == 0){
-                        selection = m;
-                    }
-                    m = (m+1) % 20;
-                }
-                if(write(workers[selection][1][1], &l, sizeof(int)) != sizeof(int)){
-                    for(int o = 0; o < 20; o++){
-                        close(workers[o][0][0]);
-                        close(workers[o][1][1]);
-                    }
-                    exit(-1);
-                }
-                if(write(workers[selection][1][1], &N, sizeof(int)) != sizeof(int)){
-                    for(int o = 0; o < 20; o++){
-                        close(workers[o][0][0]);
-                        close(workers[o][1][1]);
-                    }
-                    exit(-1);
                 }
             }
+
             // Manager is done - close up shop and send message to combiner parent
-            if(write(channels[ct][1],&data,sizeof(double *)) != sizeof(double *)){
-                for(int p = 0; p < worker_amount; p++){
-                    close(workers[p][0][0]); // close write end of worker to manager
-                    close(workers[p][1][1]); // close read end of manager to worker
-                }
-                close(channels[ct][1]);
-                exit(-1);
+            size_t written = 0;
+            size_t bytes = sizeof(double) * info -> num_samples;
+
+            while (written < bytes) {
+            ssize_t w = write(channels[ct][1], (const char*)new_data + written, bytes - written);
+
+            if (w < 0) {
+                perror("write");
+                exit(1);
             }
+
+            if (w == 0) {
+                fprintf(stderr, "Pipe closed while writing\n");
+                exit(1);
+            }
+
+            written += w;
+            }
+
             for(int p = 0; p < worker_amount; p++){
                 int done_signal = -1;
                 write(workers[p][1][1], &done_signal, sizeof(int));
@@ -187,9 +254,6 @@ int main() {
             }                           
     }
     // PARENT PROCESS - combine channels back together
-    double *modified_left;
-    double *modified_right;
-
     // Close the write ends of the pipes - the parent won't be writing anything to them
     close(channels[0][1]);
     close(channels[1][1]);
@@ -211,33 +275,42 @@ int main() {
 
     // TODO: pipe can be used to send pointer to double *data over
 
-    int reads = 0;
+    double *modified_left  = malloc(sizeof(double) * info -> num_samples);
+    double *modified_right = malloc(sizeof(double) * info -> num_samples);
 
-    while (reads < 2) {
-        if (select(maxfd + 1, &read_fds, NULL, NULL, NULL) == -1) {
-            perror("Select channel-parent");
-            return 1;
-        } else {
-            // left channel has written to its pipe
-            if (FD_ISSET(channels[0][0], &read_fds) > 0) {
-                int temp;
-                if((temp = read(channels[0][0], &modified_left, sizeof(double *))) == 0){
-                    printf("%d\n", temp);
-                }
-            } else {
-                // right channel has to be set
-                read(channels[1][0], &modified_right, sizeof(double *));
-            }
+    // read the full processed channel data
+    ssize_t need = sizeof(double) * info->num_samples;
+    ssize_t got = 0;
 
-            // select modifies fd_set so we have to reset it
-            FD_ZERO(&read_fds);
-            FD_SET(channels[0][0], &read_fds);
-            FD_SET(channels[1][0], &read_fds);
-
-            reads++;
+    while (got < need) {
+        ssize_t r = read(channels[0][0], (char*)modified_left + got, need - got);
+        if (r < 0) {
+            perror("read");
+            exit(1);
         }
+        if (r == 0) {
+            fprintf(stderr, "EOF before full buffer received\n");
+            exit(1);
+        }
+        got += r;
     }
 
+    need = sizeof(double) * info->num_samples;
+    got = 0;
+
+    while (got < need) {
+        ssize_t r = read(channels[1][0], (char*)modified_right + got, need - got);
+        if (r < 0) {
+            perror("read");
+            exit(1);
+        }
+        if (r == 0) {
+            fprintf(stderr, "EOF before full buffer received\n");
+            exit(1);
+        }
+        got += r;
+    }
+    
     // we have read all the pointers to samples - now order them!
     double *modified_pcm = malloc(sizeof(double) * info->pcm_size);
 
