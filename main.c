@@ -9,11 +9,25 @@
 #include "parse_file.h"
 #include "modify_data.h"
 
+ssize_t read_full(int fd, void *buf, size_t n) {
+    size_t got = 0;
+    while (got < n) {
+        ssize_t r = read(fd, (char*)buf + got, n - got);
+        if (r < 0) return -1;
+        if (r == 0){
+            fprintf(stderr, "pipe closed :(");
+            break;
+        }
+        got += r;
+    }
+        return got;
+}
+
 int main() { 
 
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
-    double amounts[4] = {1,1,1,1}; // Default values we will change eventually
+    double amounts[4] = {7,0,0,0}; // Default values we will change eventually
     int N = 2048; // size of complete frame
 
     // channel children FDs
@@ -89,18 +103,12 @@ int main() {
                     close(workers[i][1][1]); // close write end of manager to worker
 
                     int size_of_frame, index; // Size of frame will be 2048 for all but last frame
-                    int status = 0;
 
-                    if(write(workers[i][0][1], &status, sizeof(int)) != sizeof(int)){
-                        // close(workers[i][0][1]);
-                        // close(workers[i][1][0]);
-                        exit(-1);
-                    }
                     if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // get index from parent
-                        status = -1; // read error
+                        index = -1; // read error
                     } 
                     if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
-                        status = -1; // read error
+                        index = -1; // read error
                     }
                     while(index>-1){
                         fftw_complex* complex_result = malloc(N * sizeof(fftw_complex)); 
@@ -118,7 +126,7 @@ int main() {
                         memcpy(complex_result, ifft_execute(complex_result), N * sizeof(fftw_complex)); 
                         for(int j = 0; j < N; j++){
                             real_result[j] = complex_result[j][0];
-                            real_result[j] /= N;
+                            // real_result[j] /= N;
                         }
                         free(complex_result);
                         size_t written = 0;
@@ -187,23 +195,16 @@ int main() {
                     if (pfds[i].revents & POLLIN) {
 
                         int frame_index;
-                        read(pfds[i].fd, &frame_index, sizeof(int));
+                        read_full(pfds[i].fd, &frame_index, sizeof(int));
 
                         int size_of_frame;
-                        read(pfds[i].fd, &size_of_frame, sizeof(int));
+                        read_full(pfds[i].fd, &size_of_frame, sizeof(int));
 
                         double *frame_buf = malloc(sizeof(double) * size_of_frame);
-                        ssize_t need = sizeof(double) * size_of_frame;
-                        ssize_t got = 0;
-
-                        while (got < need) {
-                            ssize_t r = read(pfds[i].fd, (char*)frame_buf + got, need - got);
-                            if (r < 0) { perror("read"); exit(1); }
-                            if (r == 0) { fprintf(stderr, "EOF before full buffer received\n"); exit(1); }
-                            got += r;
-                        }
+                        read_full(pfds[i].fd, frame_buf, sizeof(double) * size_of_frame);
 
                         int frame_start = frame_index * (N/2);
+
                         for (int j = 0; j < size_of_frame; j++) {
                             new_data[frame_start + j] += frame_buf[j];
                         }
@@ -279,40 +280,11 @@ int main() {
     double *modified_right = malloc(sizeof(double) * info -> num_samples);
 
     // read the full processed channel data
-    ssize_t need = sizeof(double) * info->num_samples;
-    ssize_t got = 0;
-
-    while (got < need) {
-        ssize_t r = read(channels[0][0], (char*)modified_left + got, need - got);
-        if (r < 0) {
-            perror("read");
-            exit(1);
-        }
-        if (r == 0) {
-            fprintf(stderr, "EOF before full buffer received\n");
-            exit(1);
-        }
-        got += r;
-    }
-
-    need = sizeof(double) * info->num_samples;
-    got = 0;
-
-    while (got < need) {
-        ssize_t r = read(channels[1][0], (char*)modified_right + got, need - got);
-        if (r < 0) {
-            perror("read");
-            exit(1);
-        }
-        if (r == 0) {
-            fprintf(stderr, "EOF before full buffer received\n");
-            exit(1);
-        }
-        got += r;
-    }
+    read_full(channels[0][0], modified_left, sizeof(double) * info -> num_samples);
+    read_full(channels[1][0], modified_right, sizeof(double) * info -> num_samples);
     
     // we have read all the pointers to samples - now order them!
-    double *modified_pcm = malloc(sizeof(double) * info->pcm_size);
+    short *modified_pcm = malloc(sizeof(int) * info->pcm_size);
 
     int l = 0;
     int r = 0;
@@ -322,10 +294,13 @@ int main() {
 
     for (unsigned int i = 0; i < info->num_samples; i++) {
         if (i % 2 == 0) { // even modulo => left channel
-            modified_pcm[i] = modified_left[l];
+            if(i==2000){
+                printf("%f",modified_left[l]);
+            }
+            modified_pcm[i] = (short)(modified_left[l]);
             l++;
         } else if (info->num_channels == 2) { // odd modulo AND stereo => right channel
-            modified_pcm[i] = modified_right[r];
+            modified_pcm[i] = (short)(modified_right[r]);
             r++;
         }
     }
@@ -340,7 +315,7 @@ int main() {
 
     // write metadata
     for (int i = 0; i <= 11; i++) {
-        if (fwrite(&((info->metadata)[i]), sizeof(int), 1, new_file) == 0) {
+        if (fwrite(&((info->metadata)[i]), sizeof(int), 1, new_file) != 1) {
             printf("Error writing metadata to new file.\n");
             fclose(new_file);
             return 1;
@@ -348,7 +323,7 @@ int main() {
     }
 
     // write data
-    if (fwrite(modified_pcm, sizeof(double) * info->pcm_size, 1, new_file) == 0) {
+    if (fwrite(modified_pcm, sizeof(short) * info->pcm_size, 1, new_file) != 1) {
         printf("Error writing PCM data to new file.\n");
         fclose(new_file);
         return 1;
