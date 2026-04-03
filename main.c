@@ -9,6 +9,10 @@
 #include "parse_file.h"
 #include "modify_data.h"
 
+#define NUM_MODS 5
+
+// char mods[NUM_MODS][3] = {"bb", "mb", "tb", "lp", "hp"};
+
 ssize_t read_full(int fd, void *buf, size_t n) {
     size_t got = 0;
     while (got < n) {
@@ -23,10 +27,69 @@ ssize_t read_full(int fd, void *buf, size_t n) {
         return got;
 }
 
-int main() { 
+int main(int argc, char *argv[]) { 
+
+    // Invalid argument count
+    if (argc != 2 /*&& argc != 3*/) {
+        printf("Usage: %s <filename>.wav <effect>\n-> Run %s mods for more details on available modifications.\n", argv[0], argv[0]);
+        return 1;
+    }
+
+    // Call ./eq help
+    /* TODO: implement a bunch of presets if we feel like it - remember to uncomment mods at the top and change NUM_MODS accordingly
+
+    if (argc == 2) {
+        char help_buf[5];
+        strncpy(help_buf, argv[1], 4);
+        help_buf[4] = '\0';
+        
+        if (strcmp(help_buf, "mods") == 0) {
+            printf("Modifications:\n");
+            printf("bb: bass boost\n");
+            printf("mb: mids boost\n");
+            printf("tb: treble boost\n");
+            printf("lp: low pass\n");
+            printf("hp: high pass\n");
+        }
+        else { 
+            printf("Usage: %s <filename>.wav <effect>\n-> Run %s mods for more details on available modifications.\n", argv[0], argv[0]);
+        }
+        return 1;
+    }
+    */
+    
+    if (strlen(argv[1]) > 32) {
+        printf("The maximum allowed file name length is 32 characters (including file extension).\n");
+        return 1;
+    }
+
+    /* TODO: implement a bunch of presets if we feel like it - remember to uncomment mods at the top and change NUM_MODS accordingly
+
+    char mod_buf[3];
+    int selected_mod = -1;
+    for (int i = 0; i < NUM_MODS; i++) {
+        strncpy(mod_buf, argv[2], 2);
+        mod_buf[2] = '\0';
+
+        if (strcmp(mod_buf, mods[i]) == 0) {
+            selected_mod = i;
+        }
+    }
+    
+    if (selected_mod == -1) {
+        printf("Invalid mod name. Run %s mods for a list of available modifications.\n", argv[0]);
+        return 1;
+    }
+    
+    */
+
+    char filename_buf[32];
+
+    strncpy(filename_buf, argv[1], 31);
+    filename_buf[31] = '\0';
 
     // parse the file
-    WAV_INFO *info = parse_file("gloop.wav");
+    WAV_INFO *info = parse_file(filename_buf);
     double amounts[4] = {2.0, 0.0, 0.0, 0.0}; // Default values we will change eventually
     int N = 2048; // size of complete frame
 
@@ -69,7 +132,7 @@ int main() {
             double max_amp = 0; // global max amplitude
             
 
-            int worker_amount = 20; // number of parallel workers
+            int worker_amount = 1; // number of parallel workers
             // Allocate an array of pipes
             int workers[worker_amount][2][2];
 
@@ -294,9 +357,6 @@ int main() {
 
     for (unsigned int i = 0; i < info->num_samples; i++) {
         if (i % 2 == 0) { // even modulo => left channel
-            if(i==2000){
-                printf("%f",modified_left[l]);
-            }
             modified_pcm[i] = (short)(modified_left[l]);
             l++;
         } else if (info->num_channels == 2) { // odd modulo AND stereo => right channel
@@ -331,5 +391,9 @@ int main() {
 
     // we are done using the new file so we can close it
     fclose(new_file);
+
+    free(info->left_channel_pcm);
+    free(info->right_channel_pcm);
+    free(info);
     return 0;                  
 }
