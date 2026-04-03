@@ -27,7 +27,7 @@ int main() {
 
     // parse the file
     WAV_INFO *info = parse_file("gloop.wav");
-    double amounts[4] = {2,0,0,2}; // Default values we will change eventually
+    double amounts[4] = {2.0, 0.0, 0.0, 0.0}; // Default values we will change eventually
     int N = 2048; // size of complete frame
 
     // channel children FDs

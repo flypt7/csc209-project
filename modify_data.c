@@ -103,7 +103,7 @@ double *complex_to_mag(double (*data)[2], int size) {
 void amplify(double * amounts, fftw_complex* data, int size){
     int bands = 4;
     for (int i = 0; i < size; i++) {
-        data[i][0] *= amounts[(int)((bands * i * .5) / size)];
-        data[i][1] *= amounts[(int)((bands * i * .5) / size)];
+        data[i][0] *= amounts[(int)((2 * bands * i) / size)];
+        data[i][1] *= amounts[(int)((2 * bands * i) / size)];
     }
 }
