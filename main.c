@@ -2,6 +2,7 @@
 #include <fftw3.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <math.h>
 #include <poll.h>
@@ -328,6 +329,17 @@ int main(int argc, char *argv[]) {
     close(channels[0][1]);
     close(channels[1][1]);
 
+    int status = 0;
+
+    for (int i = 0; i < info->num_channels; i++) {
+        if (waitpid(channel_pid[i], &status, 1)) {
+            if (WIFEXITED(status) && status != 0) {
+                printf("Error computing modified data.\n");
+                return 1;
+            }
+        }
+    }
+
     // Create the fd_set to check for readable input from children
     fd_set read_fds;
 
@@ -346,7 +358,7 @@ int main(int argc, char *argv[]) {
     read_full(channels[1][0], modified_right, sizeof(double) * info -> num_samples);
     
     // we have read all the pointers to samples - now order them!
-    short *modified_pcm = malloc(sizeof(int) * info->pcm_size);
+    short *modified_pcm = malloc(sizeof(short) * info->pcm_size);
 
     int l = 0;
     int r = 0;
