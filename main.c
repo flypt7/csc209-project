@@ -90,7 +90,13 @@ int main(int argc, char *argv[]) {
 
     // parse the file
     WAV_INFO *info = parse_file(filename_buf);
-    double amounts[4] = {2.0, 0.0, 0.0, 0.0}; // Default values we will change eventually
+
+    if (info->num_samples < 2048) {
+        printf("File too small to perform modifications. Please try again with a larger file.\n");
+        return 1;
+    }
+
+    double amounts[4] = {2.0, 0.0, 0.0, 0.0}; // Default values we will change eventuall
     int N = 2048; // size of complete frame
 
     // channel children FDs
@@ -128,9 +134,7 @@ int main(int argc, char *argv[]) {
             double *new_data = malloc(sizeof(double)* info->num_samples);
             
             int num_of_frames = info->num_samples / N;
-            int last_frame_size = info->num_samples % N;
-            double max_amp = 0; // global max amplitude
-            
+            int last_frame_size = info->num_samples % N;            
 
             int worker_amount = 1; // number of parallel workers
             // Allocate an array of pipes
@@ -173,25 +177,22 @@ int main(int argc, char *argv[]) {
                     if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // get size_of_frame from parent
                         index = -1; // read error
                     }
+                    
+                    double* real_result = malloc(N * sizeof(double));
+                    fftw_complex* complex_result = fftw_malloc(N * sizeof(fftw_complex)); 
+
                     while(index>-1){
-                        fftw_complex* complex_result = malloc(N * sizeof(fftw_complex)); 
-                        double* real_result = malloc(N * sizeof(double));
                         for(int j = 0; j < N; j++){
                             real_result[j] = data[(int)(N*index*.5+j)];
                             real_result[j] *= hann(j,N);
                         }
                         memcpy(complex_result, fft_execute(0,real_result), N * sizeof(fftw_complex)); // copy result of execute into result
-                        double max_amp_result = max_mag(complex_result, N); // find local max
-                        if(max_amp_result > max_amp){
-                            max_amp = max_amp_result; // check if bigger than global max
-                        }   
                         amplify(amounts, complex_result, N); 
                         memcpy(complex_result, ifft_execute(complex_result), N * sizeof(fftw_complex)); 
                         for(int j = 0; j < N; j++){
                             real_result[j] = complex_result[j][0];
                             // real_result[j] /= N;
                         }
-                        free(complex_result);
                         size_t written = 0;
                         size_t bytes = sizeof(double) * N;
 
@@ -219,6 +220,10 @@ int main(int argc, char *argv[]) {
                     close(workers[i][0][1]);
                     close(workers[i][1][0]);
                     deinitialize();
+
+                    fftw_free(complex_result);
+                    free(real_result);
+
                     exit(0);
                 } 
             }
@@ -314,6 +319,7 @@ int main(int argc, char *argv[]) {
                 close(workers[p][1][1]); // close write end of manager to worker
             }
             close(channels[ct][1]);
+            free(new_data);
             exit(0);
             }                           
     }
@@ -324,18 +330,11 @@ int main(int argc, char *argv[]) {
 
     // Create the fd_set to check for readable input from children
     fd_set read_fds;
-    int maxfd;
 
     // Set up fd_set with channel file descriptors
     FD_ZERO(&read_fds);
     FD_SET(channels[0][0], &read_fds);
     FD_SET(channels[1][0], &read_fds);
-
-    if (channels[0][0] > channels[1][0]) {
-        maxfd = channels[0][0];
-    } else {
-        maxfd = channels[1][0];
-    }
 
     // TODO: pipe can be used to send pointer to double *data over
 
@@ -374,12 +373,10 @@ int main(int argc, char *argv[]) {
     }
 
     // write metadata
-    for (int i = 0; i <= 11; i++) {
-        if (fwrite(&((info->metadata)[i]), sizeof(int), 1, new_file) != 1) {
+    if (fwrite(info->metadata, sizeof(int), 11, new_file) != 11) {
             printf("Error writing metadata to new file.\n");
             fclose(new_file);
             return 1;
-        }
     }
 
     // write data
@@ -395,5 +392,10 @@ int main(int argc, char *argv[]) {
     free(info->left_channel_pcm);
     free(info->right_channel_pcm);
     free(info);
+
+    free(modified_left);
+    free(modified_right);
+    free(modified_pcm);
+
     return 0;                  
 }

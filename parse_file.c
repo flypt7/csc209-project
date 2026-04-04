@@ -71,7 +71,7 @@ WAV_INFO *parse_file(char *filename) {
         perror("Error finding start of file:");
         exit(1);
     }
-    for (int i = 0; i <= 11; i++) {
+    for (int i = 0; i <= 10; i++) {
         if (fread(&((wav_info->metadata)[i]), sizeof(int), 1, fp) == 0) {
             printf("Error reading metadata.\n");
             exit(1);
