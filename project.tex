@@ -33,23 +33,26 @@ PCM data is stored as a sequence of integers in binary, of which the size depend
 
 Wave forms are great, but not quite what we want for this project; we are looking for \textit{frequencies}.
 
-To get frequencies from wave forms, we must convert the time domain into the frequency domain. There are three steps to this process. First, we must normalize the wave forms so that their values are all between $0$ and $1$. Then, we must use a \textbf{windowing function} which will simplify the wave forms so that their ends are flat. Finally, the conversion itself is done using \textbf{Fast Fourier Transforms (FFT)}. These transforms take a certain number of wave forms (usually a power of $2$ for algorithm efficiency) and converts them into frequency bins ranging from $0$Hz to the \textbf{Nyquist frequency}, which is equal to the sample rate divided by two. You can imagine the frequency bins as a "snapshot" of how loud the audio is at different pitches.\\
+To get frequencies from wave forms, we must convert the time domain into the frequency domain. There are two steps to this process. First, we must normalize the wave forms so that their values are all between $0$ and $1$ (this makes further calculations faster!). Then, the conversion itself is done using \textbf{Fast Fourier Transforms (FFT)}. These transforms take a certain number of wave forms (usually a power of $2$ for algorithm efficiency) and converts them into frequency bins ranging from $0$Hz to the \textbf{Nyquist frequency}, which is equal to the sample rate divided by two. You can imagine the frequency bins as a ``snapshot" of how loud the audio is at different pitches at a given time.\\
 
 These snapshots are exactly what we are looking for! But once we are done with amplifying them however we want, how do we convert them back to wave forms? The answer to this question is to go through the same steps in reverse order!
 
-We will first want to do an \textbf{Inverse Fast Fourier Transform (IFFT)} on each snapshot, and then do an \textbf{inverse windowing function} to convert all our snapshots back into wave forms. It is then just a matter of putting them back together in a file with metadata, and our audio has been modified!
+We will first want to do an \textbf{Inverse Fast Fourier Transform (IFFT)} on each snapshot to convert all our them back into wave forms. It is then just a matter of putting them back together in a file with metadata, and our audio has been modified!
 
 \subsection{Application Processing Steps}\label{steps}
 
-The amplification process is done through multiple steps, listed below. In our case, the window function we are using is the Hann Window Function.
+The amplification process is done through multiple steps, listed below. In our case, the window function we are using is the Hann Window Function, which has the following formula:
+
+$$H(n) = \sin^2\left(\frac{n\pi}{N-1}\right)$$
+
+Where $n$ is the sample's normalized PCM value and $N$ is the number of samples taken in the window (and thus how many are taken in the following FFT and IFFT).
 
 \begin{enumerate}
     \item Fetch metadata and PCM data from the \texttt{.wav} file input.
-    \item Normalize PCM data and apply Hann Window Function on slices of $2048$ PCM data integers.
+    \item Normalize PCM data.
     \item Perform FFT on each slice of $2048$ integers.
     \item Amplify specific frequency ranges by a given amount.
     \item Perform IFFT on each slice.
-    \item Apply Inverse Hann Window Function on each slice.
     \item Create new \texttt{.wav} file with the same metadata as the original file.
     \item Append modified data to it and return new file.
 \end{enumerate}
@@ -61,16 +64,64 @@ Our application comes bundled with a \texttt{Makefile}. Running \texttt{make} cr
 
 \texttt{eq} takes in the file name of the \texttt{.wav} file to modify, and will return a new file named \texttt{modified.wav} once it is done and does not encounter any errors. If \texttt{modified.wav} already exists before running the program, it will be overwritten. The file must be a \texttt{.wav} file, and must have a 16-bit PCM format. These will be checked in the program when the file is read before performing any data manipulation.
 
-\newpage
 \section{Architecture Diagram}\label{arch}
+
+See the next page. The details of what data is transferred through which pipes can be found in \hyperref[comm]{Section 4}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{architecture.jpg}
+    \caption{Architecture Diagram - Combiner-Manager-Worker Model}
+    \label{fig:arch}
+\end{figure}
 
 \newpage
 \section{Communication Protocol}\label{comm}
 
+
+
 \section{Concurrency Model}\label{conc}
+
+The system for our equalizer is split into multiple depths of forking.
+
+The first depth is from the parent (Combiner) process to the children (Manager, Channel) processes. These are created as soon as the \texttt{.wav} file is parsed successfully (we check for errors as soon as the call to our function to parse the file, called \texttt{parse\_file}
 
 \section{Error Handling and Robustness}\label{err}
 
+Throughout the steps of our audio processing, there are many checks that we have to make to ensure that the program handles failing appropriately.\\
+
+The first checks come through when parsing command-line arguments. The program ensures there are no more than 3 arguments including the program name in the format \texttt{./eq <filename>.wav <modification>}. We have a set limit of 32 characters for the file name, and the modification is checked from a list of two-character modification abbreviations. If any of the arguments are invalid for these reasons, the program will terminate abnormally (return 1).
+
+Otherwise, the program will attempt to parse the \texttt{.wav} file. This is done with the helper functions in \texttt{parse\_file.c} which is dedicated to that. Checks are done to first verify that the file at the specified path exists when calling \texttt{fopen} and has a \texttt{.wav} extension, and \texttt{fseek} and \texttt{fread} checks are done for every call to these functions. This includes reading the parts of metadata our program requires, and the PCM data itself. The file pointer is then closed within the function to ensure it does not remain open for an extended (unnecessary) amount of time. If at any point the function encounters an issue, the program will immediately exit with code 1 to show failure to the process which called it.
+
+Every call to pipe in \texttt{main.c} at all depths in our model (see \hyperref[arch]{Section 3}) is error checked. The same is true for any read calls to and from these pipes, in which we check if the entirety of the data we are supposed to read has been read. We have a helper function \texttt{full\_read} to ensure that read does not read only what is currently in the pipe in the case where the kernel buffer has some delay on write calls. 
+
 \section{Team Contributions}\label{team}
+
+Here is a list of what each of us did individually, as well as the work we did together:\\
+
+\underline{Nathan:}
+
+\begin{itemize}
+    \item Had the idea of an audio equalizer which brought this project to what it is today!
+    \item Implemented and ensured correctness in the manager-worker model for data processing. 
+\end{itemize}
+
+\underline{Thomas:}
+\begin{itemize}
+    \item Created the majority of this document.
+    \item Implemented \texttt{parse\_file.c} and its associated header for retrieving data from \texttt{.wav} files into a dedicated data structure.
+    \item Worked on some preliminary functions for data modification in \texttt{modify\_data.c} and its associated header.
+    \item Implemented the recombination of modified PCM data into a new file in \texttt{main.c}.
+    \item Created test \texttt{.wav} files for test cases on a variety of bit depths, sample rates, and channel counts.
+    \item Created the Makefile.
+\end{itemize}
+
+\underline{Teamwork:}
+\begin{itemize}
+    \item Planning times to meet up in person to discuss individual progress and work simultaneously.
+    \item Task splitting for better efficiency.
+    \item General team debugging.
+\end{itemize}
 
 \end{document}
