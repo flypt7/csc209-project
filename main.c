@@ -46,8 +46,9 @@ int main(int argc, char *argv[]) {
         if (strcmp(help_buf, "mods") == 0) {
             printf("Modifications:\n");
             printf("bb: bass boost\n");
-            printf("mb: mids boost\n");
-            printf("tb: treble boost\n");
+            printf("tb: tenor boost\n");
+            printf("ab: alto boost\n");
+            printf("sb: soprano boost\n");
             printf("lp: low pass\n");
             printf("hp: high pass\n");
         }
@@ -126,9 +127,12 @@ int main(int argc, char *argv[]) {
             
             int num_of_frames = info->num_samples / N;
 
-            int worker_amount = 1; // number of parallel workers
+            int worker_amount = 20; // number of parallel workers
             // Allocate an array of pipes
             int workers[worker_amount][2][2];
+
+            pid_t worker_pid[worker_amount];
+
 
             for (int i = 0; i < worker_amount; i++) {
                 // Create pipe for this grandchild
@@ -140,13 +144,13 @@ int main(int argc, char *argv[]) {
                     perror("pipe");
                     exit(1);
                 }
-                pid_t pid = fork();
-                if (pid == -1) {
+                worker_pid[i] = fork();
+                if (worker_pid[i] == -1) {
                     perror("fork");
                     exit(1);
                 }
 
-                if (pid == 0) {
+                if (worker_pid[i] == 0) {
                     // IN GRANDCHILD
                     initialize(N);
                     for(int j = 0; j < i; j++){
@@ -255,6 +259,19 @@ int main(int argc, char *argv[]) {
                         int frame_index;
                         read_full(pfds[i].fd, &frame_index, sizeof(int));
 
+                        if (frame_index < 0) { // calculation failure
+                            for(int p = 0; p < worker_amount; p++){
+                                int done_signal = -1;
+                                write(workers[p][1][1], &done_signal, sizeof(int));
+                                write(workers[p][1][1], &N, sizeof(int));
+                                close(workers[p][0][0]); // close read end of worker to manager
+                                close(workers[p][1][1]); // close write end of manager to worker
+                            }
+                            close(channels[ct][1]);
+                            free(new_data);
+                            exit(1);
+                        }
+
                         int size_of_frame;
                         read_full(pfds[i].fd, &size_of_frame, sizeof(int));
 
@@ -310,6 +327,18 @@ int main(int argc, char *argv[]) {
             }
             close(channels[ct][1]);
             free(new_data);
+
+            int status = 0;
+
+            for (int i = 0; i < worker_amount; i++) {
+                if (waitpid(worker_pid[i], &status, 1)) {
+                    if (WIFEXITED(status) && status != 0) {
+                        printf("Error computing modified data.\n");
+                        exit(1);
+                    }
+                }
+            }
+
             exit(0);
             }                           
     }
@@ -355,7 +384,15 @@ int main(int argc, char *argv[]) {
     }
 
     // create new file
-    FILE *new_file = fopen("modified.wav", "wb");
+    char new_filename[strlen(filename_buf) + 5];
+
+    strncpy(new_filename, filename_buf, strlen(filename_buf) - 4);
+    new_filename[strlen(filename_buf) - 4] = '\0';
+
+    strcat(new_filename, "_mod.wav");
+    new_filename[strlen(filename_buf) + 4] = '\0';
+
+    FILE *new_file = fopen(new_filename, "wb");
 
     if (new_file == NULL) {
         perror("Error opening new file:");
@@ -387,8 +424,8 @@ int main(int argc, char *argv[]) {
     free(modified_right);
     free(modified_pcm);
 
-    printf("New file modified.wav created. Any previous data in the file if it existed overwritten.\n");
-
+    printf("New file %s created in the same directory as %s. " 
+        "Any previous data in the file if it existed overwritten.\n", new_filename, filename_buf);
 
     return 0;                  
 }
