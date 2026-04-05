@@ -41,10 +41,23 @@ double max_mag(double (*data)[2], int size) {
     return max;
 }
 
-void amplify(double * amounts, fftw_complex* data, int size){
-    int bands = 4;
+void amplify(int *amounts, fftw_complex* data, int size){
     for (int i = 0; i < size; i++) {
-        data[i][0] *= amounts[(int)((2 * bands * i) / size)];
-        data[i][1] *= amounts[(int)((2 * bands * i) / size)];
+        if (i <= 20) {
+            data[i][0] *= amounts[0];
+            data[i][1] *= amounts[0];
+        }
+        else if (i <= 75) {
+            data[i][0] *= amounts[1];
+            data[i][1] *= amounts[1];
+        }
+        else if (i <= 500) {
+            data[i][0] *= amounts[2];
+            data[i][1] *= amounts[2];
+        }
+        else {
+            data[i][0] *= amounts[3];
+            data[i][1] *= amounts[3];
+        }
     }
 }
