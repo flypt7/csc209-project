@@ -101,7 +101,10 @@ int main(int argc, char *argv[]) {
             perror("Pipe");
             exit(1);
         }
-        channel_pid[ct] = fork();
+        if((channel_pid[ct] = fork()) == -1){
+            perror("fork");
+            exit(1);
+        }
         
         // children processes
         if (channel_pid[ct] == 0) {
@@ -190,8 +193,14 @@ int main(int argc, char *argv[]) {
                         size_t written = 0;
                         size_t bytes = sizeof(double) * N;
 
-                        write(workers[i][0][1], &index, sizeof(int));    
-                        write(workers[i][0][1], &size_of_frame, sizeof(int));    
+                        if(write(workers[i][0][1], &index, sizeof(int))!=sizeof(int)){
+                            perror("write");
+                            exit(1);
+                        }
+                        if(write(workers[i][0][1], &size_of_frame, sizeof(int))!=sizeof(int)){
+                            perror("write");
+                            exit(1);
+                        }
 
                         while (written < bytes) {
                         ssize_t w = write(workers[i][0][1], (const char*)real_result + written, bytes - written);
@@ -208,8 +217,14 @@ int main(int argc, char *argv[]) {
 
                         written += w;
                         }
-                        read(workers[i][1][0], &index, sizeof(int)); // we give this index in input pipe from parent
-                        read(workers[i][1][0], &size_of_frame, sizeof(int)); // we give this size in input pipe from parent
+                        if(read(workers[i][1][0], &index, sizeof(int))!=sizeof(int)){ // we give this index in input pipe from parent
+                            perror("read");
+                            exit(1);
+                        } 
+                        if(read(workers[i][1][0], &size_of_frame, sizeof(int))!=sizeof(int)){ // we give this size in input pipe from parent
+                            perror("read");
+                            exit(1);
+                        }
                     }
                     close(workers[i][0][1]);
                     close(workers[i][1][0]);
@@ -244,8 +259,14 @@ int main(int argc, char *argv[]) {
             for (int i = 0; i < worker_amount && curr_frame < total_frames; i++) {
                 int send_index = curr_frame;
                 int send_size  = N;
-                write(workers[i][1][1], &send_index, sizeof(int));
-                write(workers[i][1][1], &send_size,  sizeof(int));
+                if(write(workers[i][1][1], &send_index, sizeof(int))!=sizeof(int)){
+                    perror("write");
+                    exit(1);
+                }
+                if(write(workers[i][1][1], &send_size,  sizeof(int))!=sizeof(int)){
+                    perror("write");
+                    exit(1);
+                }
                 curr_frame++;
             }
 
@@ -262,8 +283,14 @@ int main(int argc, char *argv[]) {
                         if (frame_index < 0) { // calculation failure
                             for(int p = 0; p < worker_amount; p++){
                                 int done_signal = -1;
-                                write(workers[p][1][1], &done_signal, sizeof(int));
-                                write(workers[p][1][1], &N, sizeof(int));
+                                if(write(workers[p][1][1], &done_signal, sizeof(int))!=sizeof(int)){
+                                    perror("write");
+                                    exit(1);
+                                }
+                                if(write(workers[p][1][1], &N, sizeof(int))!=sizeof(int)){
+                                    perror("write");
+                                    exit(1);
+                                }
                                 close(workers[p][0][0]); // close read end of worker to manager
                                 close(workers[p][1][1]); // close write end of manager to worker
                             }
@@ -290,8 +317,14 @@ int main(int argc, char *argv[]) {
                         if (curr_frame < total_frames) {
                             int send_index = curr_frame;
                             int send_size  = N;
-                            write(workers[i][1][1], &send_index, sizeof(int));
-                            write(workers[i][1][1], &send_size,  sizeof(int));
+                            if(write(workers[i][1][1], &send_index, sizeof(int))!=sizeof(int)){
+                                perror("write");
+                                exit(1);
+                            }
+                            if(write(workers[i][1][1], &send_size,  sizeof(int))!=sizeof(int)){
+                                perror("write");
+                                exit(1);
+                            }
                             curr_frame++;
                         }
                     }
@@ -320,8 +353,14 @@ int main(int argc, char *argv[]) {
 
             for(int p = 0; p < worker_amount; p++){
                 int done_signal = -1;
-                write(workers[p][1][1], &done_signal, sizeof(int));
-                write(workers[p][1][1], &N, sizeof(int));
+                if(write(workers[p][1][1], &done_signal, sizeof(int))!=sizeof(int)){
+                    perror("write");
+                    exit(1);
+                }
+                if(write(workers[p][1][1], &N, sizeof(int))!=sizeof(int)){
+                    perror("write");
+                    exit(1);
+                }
                 close(workers[p][0][0]); // close read end of worker to manager
                 close(workers[p][1][1]); // close write end of manager to worker
             }

@@ -27,20 +27,6 @@ double *prepare_data(double *data, int bit_depth, int size){
  * Data modification methods (post-FFT)
 */
 
-/*
- * Return the highest magnitude in data.
- */
-double max_mag(double (*data)[2], int size) {
-    double max = -1;
-    double mag;
-    for (int i = 0; i < size; i++) {
-        if ((mag = sqrt(pow(data[i][0], 2) + pow(data[i][1], 2))) > max) {
-            max = mag;
-        }
-    }
-    return max;
-}
-
 void amplify(int *amounts, fftw_complex* data, int size){
     for (int i = 0; i < size; i++) {
         if (i <= 20) {
