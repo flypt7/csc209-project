@@ -86,6 +86,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    printf("Performing audio modifications.\n");
+
     int N = 2048; // size of complete frame
 
     // channel children FDs
@@ -327,15 +329,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Create the fd_set to check for readable input from children
-    fd_set read_fds;
-
-    // Set up fd_set with channel file descriptors
-    FD_ZERO(&read_fds);
-    FD_SET(channels[0][0], &read_fds);
-    FD_SET(channels[1][0], &read_fds);
-
-    // TODO: pipe can be used to send pointer to double *data over
+    printf("Audio modification complete. Creating new file.\n");
 
     double *modified_left  = malloc(sizeof(double) * info -> num_samples);
     double *modified_right = malloc(sizeof(double) * info -> num_samples);
@@ -349,9 +343,6 @@ int main(int argc, char *argv[]) {
 
     int l = 0;
     int r = 0;
-
-    // TODO: this loop could be implemented only using i, as integer division
-    // would lead to i/2 = 0, 0, 1, 1, 2, 2, ... as we increment i
 
     for (unsigned int i = 0; i < info->num_samples; i++) {
         if (i % 2 == 0) { // even modulo => left channel
@@ -395,6 +386,9 @@ int main(int argc, char *argv[]) {
     free(modified_left);
     free(modified_right);
     free(modified_pcm);
+
+    printf("New file modified.wav created. Any previous data in the file if it existed overwritten.\n");
+
 
     return 0;                  
 }
