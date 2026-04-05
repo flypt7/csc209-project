@@ -9,10 +9,11 @@
 #include "fftw_helper.h"
 #include "parse_file.h"
 #include "modify_data.h"
+#include "audio_presets.h"
 
-#define NUM_MODS 5
+#define NUM_MODS 6
 
-// char mods[NUM_MODS][3] = {"bb", "mb", "tb", "lp", "hp"};
+char mods[NUM_MODS][3] = {"bb", "tb", "ab", "sb", "lp", "hp"};
 
 ssize_t read_full(int fd, void *buf, size_t n) {
     size_t got = 0;
@@ -31,14 +32,12 @@ ssize_t read_full(int fd, void *buf, size_t n) {
 int main(int argc, char *argv[]) { 
 
     // Invalid argument count
-    if (argc != 2 /*&& argc != 3*/) {
+    if (argc != 2 && argc != 3) {
         printf("Usage: %s <filename>.wav <effect>\n-> Run %s mods for more details on available modifications.\n", argv[0], argv[0]);
         return 1;
     }
 
     // Call ./eq help
-    /* TODO: implement a bunch of presets if we feel like it - remember to uncomment mods at the top and change NUM_MODS accordingly
-
     if (argc == 2) {
         char help_buf[5];
         strncpy(help_buf, argv[1], 4);
@@ -57,32 +56,15 @@ int main(int argc, char *argv[]) {
         }
         return 1;
     }
-    */
     
     if (strlen(argv[1]) > 32) {
         printf("The maximum allowed file name length is 32 characters (including file extension).\n");
         return 1;
     }
 
-    /* TODO: implement a bunch of presets if we feel like it - remember to uncomment mods at the top and change NUM_MODS accordingly
-
     char mod_buf[3];
-    int selected_mod = -1;
-    for (int i = 0; i < NUM_MODS; i++) {
-        strncpy(mod_buf, argv[2], 2);
-        mod_buf[2] = '\0';
-
-        if (strcmp(mod_buf, mods[i]) == 0) {
-            selected_mod = i;
-        }
-    }
-    
-    if (selected_mod == -1) {
-        printf("Invalid mod name. Run %s mods for a list of available modifications.\n", argv[0]);
-        return 1;
-    }
-    
-    */
+    strncpy(mod_buf, argv[2], 2);
+    mod_buf[2] = '\0';
 
     char filename_buf[32];
 
@@ -97,7 +79,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    double amounts[4] = {2.0, 0.0, 0.0, 0.0}; // Default values we will change eventuall
+    int amounts[4];
+    if (select_bands(mod_buf, amounts) == 1) {
+        printf("Input preset does not match any available preset.\n");
+        printf("Run %s mods for a list of available modifications.\n", argv[0]);
+        return 1;
+    }
+
     int N = 2048; // size of complete frame
 
     // channel children FDs
@@ -135,7 +123,6 @@ int main(int argc, char *argv[]) {
             double *new_data = malloc(sizeof(double)* info->num_samples);
             
             int num_of_frames = info->num_samples / N;
-            int last_frame_size = info->num_samples % N;            
 
             int worker_amount = 1; // number of parallel workers
             // Allocate an array of pipes
